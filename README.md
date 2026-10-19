@@ -24,6 +24,36 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 명령은 **[처음부터 따라 하는 구축 절차](docs/setup.md)**를 따른다.
 이후 부팅 시와 약 15분 간격으로 IP를 확인하고 변경 시 DNS를 갱신한다.
 
+## Terraform 실행
+
+변수 설정을 마친 뒤 저장소 루트에서 검증과 계획을 실행한다.
+
+```sh
+terraform -chdir=terraform/aws init
+terraform -chdir=terraform/aws validate
+terraform -chdir=terraform/aws plan -out=aws.tfplan
+```
+
+계획 내용을 확인하고 변경이 있으면 적용한다. `No changes`이면 적용을 생략한다.
+
+```sh
+terraform -chdir=terraform/aws apply aws.tfplan
+```
+
+서버 설정 변경은 SSM으로 반영한다. 기존 EC2는 유지한다.
+같은 설정을 다시 실행하려면 [SSM 재실행 방법](docs/cloud-init-recovery.md#같은-설정을-다시-실행할-때)을 따른다.
+
+## 실행 후 정리
+
+적용을 완료했거나 `No changes`를 확인한 뒤 이전 계획 파일을 삭제한다.
+
+```sh
+rm -f terraform/aws/aws.tfplan terraform/aws/ssm-recovery.tfplan
+```
+
+`terraform.tfstate`, `terraform.tfstate.backup`, `.terraform.lock.hcl`과 `terraform.tfvars`는 유지한다.
+이 정리는 계획 파일만 삭제한다. 기존 EC2와 Terraform state는 보관한다.
+
 ## 추가 문서
 
 - [aws configure 설정 방법](docs/aws-configure.md)
