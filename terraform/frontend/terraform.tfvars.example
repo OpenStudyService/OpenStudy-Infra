@@ -1,0 +1,10 @@
+aws_account_id    = "123456789012"
+aws_region        = "ap-northeast-2"
+name_prefix       = "openstudy-prod"
+github_repository = "OpenStudyService/OpenStudy-Frontend"
+
+# Set this when the AWS account already has the GitHub OIDC provider.
+# github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+
+# Enable only after the Backend HTTPS endpoint and certificate are ready.
+# api_origin_domain_name = "openstudy.duckdns.org"

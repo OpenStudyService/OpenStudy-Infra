@@ -129,7 +129,8 @@ EC2 중지·시작 후에는 AWS 콘솔의 현재 공인 IP와 비교한다.
 
 ## 다음 작업과 운영
 
-- 정적 웹 호스팅과 OCI·ECR 배포는 [추가 배포 설계](deployment.md)를 따른다. 현재 코드는 이 구성을 생성하지 않는다.
+- 정적 웹은 [Frontend 자동 배포](frontend-deployment.md)를 따른다. `terraform/frontend`는 EC2와 별도로 생성·삭제한다.
+- Backend OCI·ECR 배포는 [추가 배포 설계](deployment.md)의 후속 작업이다.
 - 웹 접속은 CloudFront와 EC2 HTTPS 원본을 구성한 뒤 확인한다.
 - 직접 웹 접속을 열려면 `web_ingress_cidrs = ["0.0.0.0/0"]`로 바꾸고 계획·적용을 반복한다. TCP 80·443만 열린다.
 - Cloudflare는 [추가 설정 문서](cloudflare-manual.md)를 따른다. 현재 DuckDNS 연결은 EC2 직접 연결이다.

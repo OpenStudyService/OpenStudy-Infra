@@ -1,6 +1,6 @@
 # OpenStudy-Infra
 
-OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
+OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terraform으로 관리한다.
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
@@ -12,11 +12,18 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 - 서버 관리는 AWS Session Manager를 사용한다.
 - 인바운드 포트는 기본 차단한다. 필요하면 TCP 80·443을 허용한다.
 
-## 추가 배포 설계
+## Frontend 정적 웹 자동 배포
 
-다음 구성은 구현 예정이다. 현재 Terraform에는 생성 코드가 없다.
+`terraform/frontend`는 EC2와 별도 state로 S3·CloudFront·OAC와 GitHub OIDC 배포 역할을 관리한다.
+Frontend의 GitHub Actions는 검사·live 빌드·S3 게시·캐시 갱신을 실행한다.
+실제 AWS 생성과 배포는 **[Frontend 자동 배포 순서](docs/frontend-deployment.md)**를 따른다.
+이 코드 변경만으로 AWS 리소스를 생성하지 않는다.
 
-- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 비공개 Amazon S3에 게시하고 Amazon CloudFront로 제공한다.
+## Backend 배포 설계
+
+Backend OCI·ECR 자동 배포는 구현 예정이다.
+
+- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 S3·CloudFront로 제공한다. IaC와 Actions 코드를 추가했다.
 - [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): GitHub Actions에서 ARM64 OCI 이미지를 빌드해 Amazon ECR에 저장한다. EC2가 이미지를 가져와 실행한다.
 - GitHub OIDC로 AWS 배포 역할을 사용한다. 사용 후 S3·CloudFront·ECR도 전체 삭제한다.
 
@@ -70,7 +77,8 @@ terraform -chdir=terraform/aws apply destroy.tfplan
 
 EC2와 루트 디스크, 네트워크·IAM·SSM 구성을 삭제한다.
 S3·DB·백업과 별도 등록한 토큰까지 확인하는 방법은 **[AWS 전체 정리](docs/teardown.md)**를 따른다.
-현재 Terraform 구성에는 S3와 DB가 없다. 별도로 만든 리소스는 state에 포함해야 Terraform이 삭제한다.
+Frontend를 생성했다면 `terraform/frontend`도 별도로 전체 삭제한다. [Frontend 정리](docs/frontend-deployment.md#6-사용-후-전체-삭제)를 따른다.
+DB 생성 코드는 아직 없다. 별도로 만든 리소스는 state에 포함해야 Terraform이 삭제한다.
 
 코드와 로컬 state·변수 파일은 보관한다.
 다음 사용 시 Terraform을 다시 적용하고 DuckDNS 토큰을 재등록한다.
@@ -84,8 +92,9 @@ S3·DB·백업과 별도 등록한 토큰까지 확인하는 방법은 **[AWS �
 - [Cloudflare 추가 설정](docs/cloudflare-manual.md)
 - [GitOps 배포 순서](docs/gitops.md)
 - [정적 호스팅·OCI 이미지 배포 설계](docs/deployment.md)
+- [Frontend 자동 배포·생성·정리](docs/frontend-deployment.md)
 - [요구조건과 검증 상태](docs/requirements.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.
 서버 설정 결과는 SSM 실행 상태와 DNS 응답으로 확인한다.
-웹 서버·HTTPS·Cloudflare 연결은 후속 작업으로 진행한다.
+Backend HTTPS 원본·실제 API·Cloudflare 연결은 후속 작업으로 진행한다.

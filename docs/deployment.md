@@ -2,8 +2,9 @@
 
 [README로 돌아가기](../README.md)
 
-S3·CloudFront·ECR·GitHub Actions 연동은 구현 예정이다.
-현재 Terraform은 EC2·네트워크·SSM 서버 설정만 관리한다.
+Frontend S3·CloudFront·OIDC 역할과 GitHub Actions 코드를 추가했다.
+[Frontend 배포 순서](frontend-deployment.md)에서 실제 생성과 배포를 실행한다.
+Backend OCI·ECR·GitOps 연동은 구현 예정이다.
 
 ## 1. 저장소와 배포 대상
 
@@ -47,7 +48,7 @@ Frontend의 운영 빌드는 실제 `/api`를 호출한다.
 
 ## 3. 구현 순서
 
-1. Terraform에 S3·CloudFront·OAC·Private ECR과 배포용 IAM Role을 추가한다.
+1. `terraform/frontend`로 S3·CloudFront·OAC와 Frontend 배포 역할을 생성한다. Backend의 Private ECR·배포 역할은 후속으로 추가한다.
 2. GitHub OIDC 신뢰를 저장소와 배포 브랜치로 제한한다. Frontend 게시 역할과 Backend ECR push 역할을 분리한다.
 3. Frontend 검사 후 `npm run build`를 실행한다. `dist/`를 S3에 게시하고 CloudFront 캐시를 갱신한다.
 4. Backend 테스트 후 `linux/arm64` OCI 이미지를 빌드한다. 커밋 SHA 태그로 ECR에 push하고 digest를 기록한다.

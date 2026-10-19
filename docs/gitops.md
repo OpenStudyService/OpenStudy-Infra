@@ -4,7 +4,8 @@
 
 Backend는 Git의 배포 설정과 Amazon ECR 이미지를 서버가 가져오는 방식을 사용한다.
 Frontend 정적 파일은 Amazon S3·CloudFront로 제공하도록 설계한다.
-현재는 설계 단계다. [배포 설계](deployment.md)의 인프라·Actions·Compose·동기화 코드는 후속 작업으로 구현한다.
+Frontend 인프라와 Actions는 [자동 배포 순서](frontend-deployment.md)를 따른다.
+Backend의 [배포 설계](deployment.md)에 해당하는 ECR·Actions·Compose·동기화 코드는 후속 작업으로 구현한다.
 
 ## 1. 인프라 준비
 

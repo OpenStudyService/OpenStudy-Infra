@@ -20,6 +20,9 @@ EC2는 `disable_api_termination = false`를 사용한다.
 
 ## 2. Terraform 리소스 삭제
 
+Frontend 정적 호스팅을 생성했다면 먼저 [Frontend 전체 삭제](frontend-deployment.md#6-사용-후-전체-삭제)를 실행한다.
+`terraform/aws`와 `terraform/frontend`의 state는 분리되어 있다. 한쪽 삭제가 다른 쪽 리소스를 삭제하지 않는다.
+
 저장소 루트에서 삭제 계획을 만든다.
 
 ```sh
@@ -38,7 +41,8 @@ state 목록에 관리 리소스가 남아 있지 않은지 확인한다.
 
 ## 3. S3·CloudFront·ECR·DB·백업 확인
 
-현재 이 저장소에는 S3·CloudFront·ECR과 DB 생성 코드가 없다.
+S3·CloudFront·OIDC 배포 역할은 `terraform/frontend`로 생성·삭제한다.
+현재 이 저장소에는 ECR과 DB 생성 코드가 없다.
 별도로 생성했다면 Terraform으로 가져와 같은 삭제 범위에 포함한다.
 
 | 대상 | 전체 삭제 기준 |
