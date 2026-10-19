@@ -34,3 +34,8 @@ output "duckdns_token_parameter_name" {
 output "duckdns_hostname" {
   value = var.enable_duckdns ? "${var.duckdns_subdomain}.duckdns.org" : null
 }
+
+output "server_configuration_association_id" {
+  description = "State Manager association that applies the Terraform server configuration."
+  value       = aws_ssm_association.server.association_id
+}

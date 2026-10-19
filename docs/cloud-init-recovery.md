@@ -1,55 +1,58 @@
-# 초기 설정 실패 복구
+# Terraform으로 초기 설정 복구
 
 [README로 돌아가기](../README.md) · [구축 절차 6단계](setup.md#6-ec2에서-갱신-실행)
 
-## 1. 실패 원인 확인
+## 1. 변수 수정
 
-EC2의 Session Manager에서 실행한다.
-
-```sh
-sudo cloud-init status --long
-sudo tail -n 80 /var/log/cloud-init-output.log
-```
-
-`/download/2035.10.1/`에서 404 오류가 발생했다면 cloudflared 버전 오타다.
-아래 절차는 이 오류로 최초 설정이 중단된 서버에 적용한다.
-
-## 2. EC2의 설치 버전 수정
-
-확인한 공식 배포 버전은 [2026.10.1](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.1)이다.
-실패한 스크립트를 백업하고 해당 URL만 수정한다.
-
-```sh
-sudo cp -n /var/lib/cloud/instance/scripts/part-001 /root/openstudy-bootstrap.before-fix.sh
-sudo sed -i 's|/download/2035\.10\.1/|/download/2026.10.1/|g' /var/lib/cloud/instance/scripts/part-001
-sudo bash /var/lib/cloud/instance/scripts/part-001
-```
-
-백업은 cloud-init의 실행 디렉터리 밖에 보관한다.
-설치 오류가 다시 발생하면 해당 출력부터 확인한다.
-
-## 3. 서비스와 DNS 확인
-
-재실행이 성공한 뒤 EC2에서 확인한다.
-
-```sh
-sudo systemctl is-active docker chronyd amazon-ssm-agent openstudy-duckdns.timer
-swapon --show
-sudo systemctl start openstudy-duckdns.service
-sudo journalctl -u openstudy-duckdns.service -n 10 --no-pager
-```
-
-DuckDNS 로그에 `updated` 또는 `unchanged`가 나오면 [DNS 연결 확인](setup.md#7-dns-연결-확인)을 진행한다.
-스크립트를 직접 재실행하므로 cloud-init의 최초 실패 기록은 남을 수 있다.
-복구 결과는 서비스 상태와 DNS 응답으로 확인한다.
-
-## 4. 로컬 변수도 수정
-
-로컬 PC의 `terraform/aws/terraform.tfvars`에서 다음 값으로 수정한다.
+`2035.10.1` 다운로드의 404 오류는 버전 오타다.
+로컬 `terraform/aws/terraform.tfvars`에서 확인한 [공식 배포 버전](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.1)으로 수정한다.
 
 ```hcl
 cloudflared_version = "2026.10.1"
 ```
 
-기존 EC2의 복구는 2단계 명령으로 수행한다.
-Terraform은 user data 변경 시 서버 교체를 계획할 수 있으므로 복구 목적으로 재적용하지 않는다.
+## 2. Terraform 적용
+
+저장소 루트에서 실행한다.
+
+```sh
+terraform -chdir=terraform/aws init
+terraform -chdir=terraform/aws plan -out=aws.tfplan
+```
+
+계획에서 기존 EC2를 교체하지 않는지 확인한 뒤 적용한다.
+
+```sh
+terraform -chdir=terraform/aws apply aws.tfplan
+```
+
+Terraform이 SSM으로 수정한 설치 스크립트를 기존 EC2에 적용한다.
+설정 변경 시 SSM 실행 연결을 다시 생성하고, 성공할 때까지 최대 30분 동안 기다린다.
+EC2의 최초 user data는 보관한다. 이후 설치 설정은 SSM 문서를 기준으로 관리한다.
+
+## 3. 결과 확인
+
+AWS 콘솔의 **Systems Manager → State Manager → openstudy-prod-configure-server**에서 실행 결과를 확인한다.
+상태가 `Success`인지 확인한다.
+
+EC2의 Session Manager에서 서비스를 확인한다.
+
+```sh
+sudo systemctl is-active docker chronyd amazon-ssm-agent openstudy-duckdns.timer
+swapon --show
+sudo journalctl -u openstudy-duckdns.service -n 10 --no-pager
+```
+
+이후 [DNS 연결 확인](setup.md#7-dns-연결-확인)을 진행한다.
+cloud-init의 최초 실패 기록이 남아 있어도 SSM 실행과 서비스 상태로 복구 결과를 확인한다.
+
+## 같은 설정을 다시 실행할 때
+
+일시 오류를 해결한 뒤 같은 설정을 다시 실행하려면 SSM 실행 연결만 다시 생성한다.
+
+```sh
+terraform -chdir=terraform/aws plan -replace=aws_ssm_association.server -out=aws.tfplan
+terraform -chdir=terraform/aws apply aws.tfplan
+```
+
+동작 기준은 [AWS State Manager 안내](https://docs.aws.amazon.com/systems-manager/latest/userguide/state-manager-about.html)를 따른다.

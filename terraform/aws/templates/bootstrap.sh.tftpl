@@ -121,4 +121,9 @@ DUCKDNS_TIMER
 
 systemctl daemon-reload
 systemctl enable --now openstudy-duckdns.timer
+%{ else ~}
+if systemctl cat openstudy-duckdns.timer >/dev/null 2>&1; then
+  systemctl disable --now openstudy-duckdns.timer
+  systemctl stop openstudy-duckdns.service
+fi
 %{ endif ~}

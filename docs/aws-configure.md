@@ -62,7 +62,7 @@ aws sts get-caller-identity --query Account --output text
 | --- | --- |
 | `Unable to locate credentials` | `aws configure`에 키를 입력했는지 확인한다. |
 | `InvalidClientTokenId` | 키의 활성 상태와 입력한 키 쌍을 확인한다. |
-| Terraform의 `AccessDenied` | 해당 리소스 작업에 필요한 IAM 권한을 확인한다. 인증 성공과 생성 권한은 별개다. |
+| Terraform의 `AccessDenied` | EC2·IAM·SSM 문서·SSM 실행 연결의 관리 권한을 확인한다. 인증 성공과 생성 권한은 별개다. |
 
 계속 이전 키를 사용한다면 `aws configure list`로 적용된 설정 출처를 확인한다.
 환경변수의 자격증명은 파일보다 우선한다. [설정 우선순위](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html#configure-precedence)를 따른다.

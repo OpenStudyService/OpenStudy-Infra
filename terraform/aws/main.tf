@@ -161,7 +161,7 @@ resource "aws_instance" "server" {
   disable_api_termination     = true
   monitoring                  = false
   user_data                   = local.user_data
-  user_data_replace_on_change = true
+  user_data_replace_on_change = false
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -183,7 +183,8 @@ resource "aws_instance" "server" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [ami]
+    # After launch, configuration changes are delivered by the SSM association.
+    ignore_changes = [ami, user_data]
 
     precondition {
       condition     = var.free_tier_confirmed

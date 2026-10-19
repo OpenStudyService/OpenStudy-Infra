@@ -70,7 +70,8 @@ terraform -chdir=terraform/aws apply aws.tfplan
 ```
 
 기본 구성은 서울 리전의 `t4g.small`, 디스크 8GiB, 스왑 1GiB를 사용한다.
-서버 초기 설정과 DuckDNS 갱신 서비스를 함께 설치한다.
+Terraform이 SSM 문서와 실행 연결을 생성해 서버 설정을 적용한다.
+설정이 성공할 때까지 최대 30분 동안 기다린다.
 
 ## 5. DuckDNS 토큰 저장
 
@@ -99,14 +100,12 @@ AWS 콘솔에서 같은 계정·리전을 선택한다.
 AWS 콘솔에서 **EC2 → 인스턴스 → 생성한 서버 → 연결 → Session Manager**로 접속한다.
 서버 안에서 실행한다.
 
-```sh
-sudo cloud-init status --wait
-```
-
-`status: error`이면 [초기 설정 실패 복구](cloud-init-recovery.md)를 먼저 진행한다.
-정상 완료 후 아래 명령을 실행한다.
+Terraform 적용이 실패했다면 [초기 설정 실패 복구](cloud-init-recovery.md)를 먼저 진행한다.
+설정 완료 후 아래 명령으로 서비스를 확인한다.
 
 ```sh
+sudo systemctl is-active docker chronyd amazon-ssm-agent openstudy-duckdns.timer
+swapon --show
 sudo systemctl start openstudy-duckdns.service
 sudo journalctl -u openstudy-duckdns.service -n 10 --no-pager
 ```
@@ -134,4 +133,4 @@ EC2 중지·시작 후에는 AWS 콘솔의 현재 공인 IP와 비교한다.
 - 직접 웹 접속을 열려면 `web_ingress_cidrs = ["0.0.0.0/0"]`로 바꾸고 계획·적용을 반복한다. TCP 80·443만 열린다.
 - Cloudflare는 [추가 설정 문서](cloudflare-manual.md)를 따른다. 현재 DuckDNS 연결은 EC2 직접 연결이다.
 - Terraform state를 보관한다. 여러 작업자가 적용하기 전에는 잠금을 지원하는 원격 저장소로 옮긴다.
-- 기존 서버의 초기 설정 변경은 교체 계획을 만들 수 있다. `prevent_destroy`를 해제해 강제 교체하지 않는다.
+- 설치 설정 변경은 SSM으로 적용한다. AMI와 최초 user data 변경으로 기존 EC2를 교체하지 않는다.

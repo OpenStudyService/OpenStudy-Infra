@@ -7,6 +7,7 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 
 - 서울 리전에 `t4g.small` 1대, gp3 8GiB, 스왑 1GiB를 구성한다.
 - Docker와 DuckDNS 자동 갱신 서비스를 설치한다.
+- Terraform이 SSM으로 서버 설정을 적용한다. 설정 변경 시 기존 EC2를 유지한다.
 - 서버 관리는 AWS Session Manager를 사용한다.
 - 인바운드 포트는 기본 차단한다. 필요하면 TCP 80·443을 허용한다.
 
@@ -33,5 +34,5 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 - [요구조건과 검증 상태](docs/requirements.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.
-현재 코드는 준비한 상태다. 실제 AWS 배포와 DNS 연결 확인은 남아 있다.
+서버 설정 결과는 SSM 실행 상태와 DNS 응답으로 확인한다.
 웹 서버·HTTPS·Cloudflare 연결은 후속 작업으로 진행한다.

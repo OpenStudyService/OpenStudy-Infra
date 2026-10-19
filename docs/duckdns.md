@@ -39,13 +39,14 @@ sudo systemctl start openstudy-duckdns.service
 
 ## 3. 자동 갱신 중지
 
-기존 EC2에서 타이머를 중지한다.
+로컬 `terraform/aws/terraform.tfvars`에 `enable_duckdns = false`를 설정한다.
+저장소 루트에서 계획을 확인하고 적용한다.
 
 ```sh
-sudo systemctl disable --now openstudy-duckdns.timer
+terraform -chdir=terraform/aws plan -out=aws.tfplan
+terraform -chdir=terraform/aws apply aws.tfplan
 ```
 
-이후 새 서버에도 설치하지 않으려면 `enable_duckdns = false`로 설정한다.
-기존 서버의 초기 설정 변경은 교체 계획이 생길 수 있으므로 먼저 계획을 확인한다.
+SSM이 기존 서버의 타이머를 중지한다. EC2는 유지한다.
 
 API 형식은 [DuckDNS 공식 명세](https://www.duckdns.org/spec.jsp)를 따른다.

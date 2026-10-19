@@ -8,7 +8,8 @@ Git의 배포 설정을 서버가 가져와 컨테이너에 적용하는 방식�
 ## 1. 인프라 준비
 
 [구축 절차](setup.md)로 EC2와 `openstudy.duckdns.org` 연결을 먼저 구성한다.
-Terraform은 인프라를 관리하고, GitOps는 애플리케이션 배포를 관리한다.
+Terraform은 인프라와 SSM을 통한 서버 설정을 관리한다.
+GitOps는 애플리케이션 배포를 관리한다.
 
 ## 2. 애플리케이션 배포
 

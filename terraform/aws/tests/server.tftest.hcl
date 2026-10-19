@@ -1,4 +1,10 @@
 mock_provider "aws" {
+  mock_resource "aws_ssm_document" {
+    defaults = {
+      latest_version = "1"
+    }
+  }
+
   mock_data "aws_availability_zones" {
     defaults = {
       names = ["ap-northeast-2a"]
@@ -17,6 +23,7 @@ variables {
   aws_region          = "ap-northeast-2"
   name_prefix         = "openstudy-prod"
   instance_type       = "t4g.small"
+  cloudflared_version = "2026.10.1"
   free_tier_confirmed = true
   enable_duckdns      = true
   duckdns_subdomain   = "openstudy"
@@ -106,8 +113,8 @@ run "disable_duckdns" {
   }
 
   assert {
-    condition     = length(aws_iam_role_policy.duckdns) == 0 && output.duckdns_token_parameter_name == null && !strcontains(local.user_data, "openstudy-duckdns.timer")
-    error_message = "Disabling DuckDNS must omit its credential permissions and update timer."
+    condition     = length(aws_iam_role_policy.duckdns) == 0 && output.duckdns_token_parameter_name == null && !strcontains(local.user_data, "Environment=DUCKDNS_SUBDOMAIN=") && strcontains(local.user_data, "systemctl disable --now openstudy-duckdns.timer")
+    error_message = "Disabling DuckDNS must remove token access and stop an existing update timer."
   }
 }
 
@@ -119,4 +126,36 @@ run "reject_full_hostname_as_subdomain" {
   }
 
   expect_failures = [var.duckdns_subdomain]
+}
+
+run "configuration_seed" {
+  command = apply
+
+  assert {
+    condition     = !aws_instance.server.user_data_replace_on_change && aws_ssm_association.server.targets[0].values == tolist([aws_instance.server.id]) && aws_ssm_association.server.document_version == aws_ssm_document.server.latest_version && aws_ssm_association.server.wait_for_success_timeout_seconds == 1800
+    error_message = "Terraform must apply the exact document version only to its server and wait for configuration success."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.server_configuration.policy).Statement[1].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:document/openstudy-prod-configure-server" && alltrue([for statement in jsondecode(aws_iam_role_policy.server_configuration.policy).Statement : !contains(statement.Action, "ssm:GetParameter") && !contains(statement.Action, "ssm:GetParameters")])
+    error_message = "State Manager permissions must not grant broad Parameter Store access."
+  }
+}
+
+run "configuration_update_keeps_server" {
+  command = plan
+
+  variables {
+    cloudflared_version = "2026.10.2"
+  }
+
+  assert {
+    condition     = aws_instance.server.id == run.configuration_seed.instance_id
+    error_message = "Changing the install version must preserve the existing instance."
+  }
+
+  assert {
+    condition     = strcontains(aws_ssm_document.server.content, "/download/2026.10.2/") && !strcontains(aws_ssm_document.server.content, "/download/2026.10.1/")
+    error_message = "The configuration change must be delivered through the SSM document."
+  }
 }
