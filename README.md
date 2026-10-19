@@ -25,6 +25,7 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 
 ## 추가 문서
 
+- [aws configure 설정 방법](docs/aws-configure.md)
 - [DuckDNS 토큰 변경과 오류 해결](docs/duckdns.md)
 - [Cloudflare 추가 설정](docs/cloudflare-manual.md)
 - [GitOps 배포 순서](docs/gitops.md)

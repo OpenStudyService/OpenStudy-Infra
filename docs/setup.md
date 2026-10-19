@@ -23,11 +23,10 @@ git clone https://github.com/OpenStudyService/OpenStudy-Infra.git
 cd OpenStudy-Infra
 ```
 
-로컬 AWS CLI 인증을 설정하고 계정 ID를 확인한다.
-인증이 이미 되어 있다면 `aws configure`를 생략한다.
+AWS CLI 인증을 처음 설정한다면 [aws configure 설정 방법](aws-configure.md)을 따른다.
+설정 후 아래 명령으로 계정 ID를 확인한다.
 
 ```sh
-aws configure
 aws sts get-caller-identity --query Account --output text
 ```
 
