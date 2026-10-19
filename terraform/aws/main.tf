@@ -158,7 +158,7 @@ resource "aws_instance" "server" {
   vpc_security_group_ids      = [aws_security_group.server.id]
   associate_public_ip_address = true
   iam_instance_profile        = aws_iam_instance_profile.server.name
-  disable_api_termination     = true
+  disable_api_termination     = false
   monitoring                  = false
   user_data                   = local.user_data
   user_data_replace_on_change = false
@@ -177,12 +177,11 @@ resource "aws_instance" "server" {
     volume_type           = "gp3"
     volume_size           = var.root_volume_size_gib
     encrypted             = true
-    delete_on_termination = false
+    delete_on_termination = true
     tags                  = { Name = "${var.name_prefix}-root" }
   }
 
   lifecycle {
-    prevent_destroy = true
     # After launch, configuration changes are delivered by the SSM association.
     ignore_changes = [ami, user_data]
 

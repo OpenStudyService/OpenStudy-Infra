@@ -134,3 +134,4 @@ EC2 중지·시작 후에는 AWS 콘솔의 현재 공인 IP와 비교한다.
 - Cloudflare는 [추가 설정 문서](cloudflare-manual.md)를 따른다. 현재 DuckDNS 연결은 EC2 직접 연결이다.
 - Terraform state를 보관한다. 여러 작업자가 적용하기 전에는 잠금을 지원하는 원격 저장소로 옮긴다.
 - 설치 설정 변경은 SSM으로 적용한다. AMI와 최초 user data 변경으로 기존 EC2를 교체하지 않는다.
+- 사용을 마치면 [AWS 전체 정리](teardown.md)로 EC2·디스크와 추가한 S3·DB·백업을 삭제한다.

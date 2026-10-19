@@ -2,6 +2,7 @@
 
 OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결한다.
+필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
 ## 기본 구성
 
@@ -43,20 +44,31 @@ terraform -chdir=terraform/aws apply aws.tfplan
 서버 설정 변경은 SSM으로 반영한다. 기존 EC2는 유지한다.
 같은 설정을 다시 실행하려면 [SSM 재실행 방법](docs/cloud-init-recovery.md#같은-설정을-다시-실행할-때)을 따른다.
 
-## 실행 후 정리
+## 사용 후 정리: AWS 전체 삭제
 
-적용을 완료했거나 `No changes`를 확인한 뒤 이전 계획 파일을 삭제한다.
+사용을 마치면 삭제 계획을 확인한다.
 
 ```sh
-rm -f terraform/aws/aws.tfplan terraform/aws/ssm-recovery.tfplan
+terraform -chdir=terraform/aws plan -destroy -out=destroy.tfplan
 ```
 
-`terraform.tfstate`, `terraform.tfstate.backup`, `.terraform.lock.hcl`과 `terraform.tfvars`는 유지한다.
-이 정리는 계획 파일만 삭제한다. 기존 EC2와 Terraform state는 보관한다.
+대상이 OpenStudy 리소스인지 확인한 뒤 삭제한다.
+
+```sh
+terraform -chdir=terraform/aws apply destroy.tfplan
+```
+
+EC2와 루트 디스크, 네트워크·IAM·SSM 구성을 삭제한다.
+S3·DB·백업과 별도 등록한 토큰까지 확인하는 방법은 **[AWS 전체 정리](docs/teardown.md)**를 따른다.
+현재 Terraform 구성에는 S3와 DB가 없다. 별도로 만든 리소스는 state에 포함해야 Terraform이 삭제한다.
+
+코드와 로컬 state·변수 파일은 보관한다.
+다음 사용 시 Terraform을 다시 적용하고 DuckDNS 토큰을 재등록한다.
 
 ## 추가 문서
 
 - [aws configure 설정 방법](docs/aws-configure.md)
+- [AWS 전체 정리](docs/teardown.md)
 - [초기 설정 실패 복구](docs/cloud-init-recovery.md)
 - [DuckDNS 토큰 변경과 오류 해결](docs/duckdns.md)
 - [Cloudflare 추가 설정](docs/cloudflare-manual.md)

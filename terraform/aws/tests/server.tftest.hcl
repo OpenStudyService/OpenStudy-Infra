@@ -44,8 +44,8 @@ run "server_security" {
   }
 
   assert {
-    condition     = aws_instance.server.disable_api_termination && !aws_instance.server.root_block_device[0].delete_on_termination && aws_instance.server.root_block_device[0].encrypted
-    error_message = "Protect the instance from termination and retain the encrypted root volume."
+    condition     = !aws_instance.server.disable_api_termination && aws_instance.server.root_block_device[0].delete_on_termination && aws_instance.server.root_block_device[0].encrypted
+    error_message = "The lab must allow teardown and delete its encrypted root volume on termination."
   }
 
   assert {
