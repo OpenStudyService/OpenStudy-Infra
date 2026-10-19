@@ -5,15 +5,23 @@
 `terraform/frontend`는 EC2와 별도 state로 정적 웹 인프라를 관리한다.
 비공개 Amazon S3, Amazon CloudFront·OAC·SPA 경로 함수와 GitHub OIDC 배포 역할을 생성한다.
 Frontend 저장소의 Actions는 검사·live 빌드 후 S3에 게시한다.
-코드와 모의 테스트를 제공한다. 실제 AWS 적용과 운영 API 연결은 별도 실행한다.
+코드와 모의 테스트를 제공한다. 인프라 생성 후 정적 파일 게시와 운영 API 연결을 진행한다.
 
 ## 1. AWS와 변수 준비
 
 [AWS 인증](aws-configure.md)을 먼저 설정한다. 아래 명령은 OpenStudy-Infra에서 실행한다.
+Terraform은 **1.10.0**을 사용한다. tfenv는 저장소의 `.terraform-version`을 자동으로 읽는다.
+
+```sh
+tfenv install
+terraform version
+```
+
+첫 줄이 `Terraform v1.10.0`인지 확인한다. 변수 파일은 없을 때만 복사한다.
 
 ```sh
 aws sts get-caller-identity
-cp terraform/frontend/terraform.tfvars.example terraform/frontend/terraform.tfvars
+cp -n terraform/frontend/terraform.tfvars.example terraform/frontend/terraform.tfvars
 ```
 
 `terraform.tfvars`의 `aws_account_id`를 실제 계정 ID로 변경한다.
@@ -26,16 +34,25 @@ aws iam get-open-id-connect-provider \
   --open-id-connect-provider-arn arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com
 ```
 
+`NoSuchEntity`이면 Provider가 없는 상태다. `github_oidc_provider_arn`을 주석으로 두면 Terraform이 생성한다.
+이 state가 이미 생성한 Provider는 외부 Provider ARN으로 다시 지정하지 않는다.
+
 ## 2. 정적 웹 인프라 생성
 
 ```sh
 terraform -chdir=terraform/frontend init
 terraform -chdir=terraform/frontend validate
 terraform -chdir=terraform/frontend plan -out=frontend.tfplan
+```
+
+생성·변경 대상을 확인한 뒤 같은 Terraform 버전으로 적용한다. `No changes`이면 적용을 생략한다.
+
+```sh
 terraform -chdir=terraform/frontend apply frontend.tfplan
 terraform -chdir=terraform/frontend output -json github_actions_variables
 ```
 
+버전이나 `terraform.tfvars`를 변경했다면 `plan`을 다시 실행한다. 이전 계획 파일은 사용하지 않는다.
 이 구성은 EC2를 생성하지 않는다. CloudFront가 배포될 때까지 기다린다.
 사이트 주소는 `terraform -chdir=terraform/frontend output -raw frontend_url`로 확인한다.
 첫 파일 게시 전에는 S3에 파일이 없으므로 사이트가 정상 응답하지 않는다.
@@ -56,6 +73,7 @@ Secrets나 AWS Access Key를 등록하지 않는다.
 배포 역할은 `OpenStudyService/OpenStudy-Frontend`의 `main` 브랜치만 허용한다.
 다른 저장소를 사용할 때는 Terraform의 `github_repository`도 변경한다.
 `AWS_DEPLOY_ROLE_ARN`이 없으면 Actions는 검사·빌드만 실행한다.
+Frontend의 [자동 배포 PR #2](https://github.com/OpenStudyService/OpenStudy-Frontend/pull/2)를 원본 `main`에 병합한 뒤 사용한다.
 
 ## 4. 자동 배포와 확인
 

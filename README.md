@@ -4,6 +4,13 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terra
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
+## 실행 환경
+
+Terraform은 **1.10.0**으로 고정한다. 저장소의 `.terraform-version`을 따른다.
+tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 준비한다.
+`terraform version`의 첫 줄이 `Terraform v1.10.0`인지 확인한다.
+계획 생성과 적용은 같은 버전으로 실행한다. 버전이나 변수를 바꾸면 계획을 다시 생성한다.
+
 ## 기본 구성
 
 - 서울 리전에 `t4g.small` 1대, gp3 8GiB, 스왑 1GiB를 구성한다.

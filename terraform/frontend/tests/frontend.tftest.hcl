@@ -66,7 +66,7 @@ run "https_api_origin" {
     error_message = "Both API paths must preserve all methods and bypass SPA rewriting."
   }
   assert {
-    condition     = alltrue([for o in aws_cloudfront_distribution.frontend.origin : o.origin_id != "backend-https" || o.custom_origin_config[0].origin_protocol_policy == "https-only"]) && data.aws_cloudfront_cache_policy.api[0].name == "Managed-CachingDisabled" && data.aws_cloudfront_origin_request_policy.api[0].name == "Managed-AllViewerExceptHostHeader"
+    condition     = alltrue([for o in aws_cloudfront_distribution.frontend.origin : o.custom_origin_config[0].origin_protocol_policy == "https-only" if o.origin_id == "backend-https"]) && data.aws_cloudfront_cache_policy.api[0].name == "Managed-CachingDisabled" && data.aws_cloudfront_origin_request_policy.api[0].name == "Managed-AllViewerExceptHostHeader"
     error_message = "API forwarding must use HTTPS, disable caching, and forward cookies/auth with the origin Host."
   }
 }
