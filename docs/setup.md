@@ -101,6 +101,12 @@ AWS 콘솔에서 **EC2 → 인스턴스 → 생성한 서버 → 연결 → Sess
 
 ```sh
 sudo cloud-init status --wait
+```
+
+`status: error`이면 [초기 설정 실패 복구](cloud-init-recovery.md)를 먼저 진행한다.
+정상 완료 후 아래 명령을 실행한다.
+
+```sh
 sudo systemctl start openstudy-duckdns.service
 sudo journalctl -u openstudy-duckdns.service -n 10 --no-pager
 ```
