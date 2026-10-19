@@ -4,6 +4,14 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terra
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
+## 통합 아키텍처와 배포 흐름
+
+![Terraform IaC 통합 배포 아키텍처](docs/images/openstudy-terraform-deployment-numbered.png)
+
+번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
+실선은 코드가 있는 경로, 긴 점선은 후속 연결, 짧은 점선은 Terraform 제어다.
+현재 AWS 리소스는 모두 삭제한 상태다. Backend OCI·ECR 경로는 후속 구현이다.
+
 ## 실행 환경
 
 Terraform은 **1.10.0**으로 고정한다. 저장소의 `.terraform-version`을 따른다.
@@ -34,7 +42,7 @@ Backend OCI·ECR 자동 배포는 구현 예정이다.
 - [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): GitHub Actions에서 ARM64 OCI 이미지를 빌드해 Amazon ECR에 저장한다. EC2가 이미지를 가져와 실행한다.
 - GitHub OIDC로 AWS 배포 역할을 사용한다. 사용 후 S3·CloudFront·ECR도 전체 삭제한다.
 
-흐름과 구현 순서는 [정적 호스팅·OCI 이미지 배포 설계](docs/deployment.md)를 따른다.
+Terraform과 애플리케이션의 역할 및 전체 순서는 [통합 배포 문서](docs/deployment.md)를 따른다.
 
 ## 실행 순서
 
@@ -98,7 +106,7 @@ DB 생성 코드는 아직 없다. 별도로 만든 리소스는 state에 포함
 - [DuckDNS 토큰 변경과 오류 해결](docs/duckdns.md)
 - [Cloudflare 추가 설정](docs/cloudflare-manual.md)
 - [GitOps 배포 순서](docs/gitops.md)
-- [정적 호스팅·OCI 이미지 배포 설계](docs/deployment.md)
+- [Terraform IaC 통합 아키텍처·배포 흐름](docs/deployment.md)
 - [Frontend 자동 배포·생성·정리](docs/frontend-deployment.md)
 - [요구조건과 검증 상태](docs/requirements.md)
 

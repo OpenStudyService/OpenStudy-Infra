@@ -6,6 +6,7 @@
 비공개 Amazon S3, Amazon CloudFront·OAC·SPA 경로 함수와 GitHub OIDC 배포 역할을 생성한다.
 Frontend 저장소의 Actions는 검사·live 빌드 후 S3에 게시한다.
 코드와 모의 테스트를 제공한다. 인프라 생성 후 정적 파일 게시와 운영 API 연결을 진행한다.
+전체 관계와 번호 설명은 [통합 아키텍처·배포 흐름](deployment.md)을 따른다.
 
 ## 1. AWS와 변수 준비
 
