@@ -12,6 +12,16 @@ OpenStudy의 AWS 네트워크와 EC2를 Terraform으로 관리한다.
 - 서버 관리는 AWS Session Manager를 사용한다.
 - 인바운드 포트는 기본 차단한다. 필요하면 TCP 80·443을 허용한다.
 
+## 추가 배포 설계
+
+다음 구성은 구현 예정이다. 현재 Terraform에는 생성 코드가 없다.
+
+- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 비공개 Amazon S3에 게시하고 Amazon CloudFront로 제공한다.
+- [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): GitHub Actions에서 ARM64 OCI 이미지를 빌드해 Amazon ECR에 저장한다. EC2가 이미지를 가져와 실행한다.
+- GitHub OIDC로 AWS 배포 역할을 사용한다. 사용 후 S3·CloudFront·ECR도 전체 삭제한다.
+
+흐름과 구현 순서는 [정적 호스팅·OCI 이미지 배포 설계](docs/deployment.md)를 따른다.
+
 ## 실행 순서
 
 1. [DuckDNS 등록](docs/setup.md#1-duckdns-등록): `openstudy`를 등록하고 토큰을 확인한다.
@@ -73,6 +83,7 @@ S3·DB·백업과 별도 등록한 토큰까지 확인하는 방법은 **[AWS �
 - [DuckDNS 토큰 변경과 오류 해결](docs/duckdns.md)
 - [Cloudflare 추가 설정](docs/cloudflare-manual.md)
 - [GitOps 배포 순서](docs/gitops.md)
+- [정적 호스팅·OCI 이미지 배포 설계](docs/deployment.md)
 - [요구조건과 검증 상태](docs/requirements.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.

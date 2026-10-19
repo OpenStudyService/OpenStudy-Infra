@@ -129,7 +129,8 @@ EC2 중지·시작 후에는 AWS 콘솔의 현재 공인 IP와 비교한다.
 
 ## 다음 작업과 운영
 
-- 웹 접속은 웹 서버와 HTTPS 인증서를 구성한 뒤 확인한다.
+- 정적 웹 호스팅과 OCI·ECR 배포는 [추가 배포 설계](deployment.md)를 따른다. 현재 코드는 이 구성을 생성하지 않는다.
+- 웹 접속은 CloudFront와 EC2 HTTPS 원본을 구성한 뒤 확인한다.
 - 직접 웹 접속을 열려면 `web_ingress_cidrs = ["0.0.0.0/0"]`로 바꾸고 계획·적용을 반복한다. TCP 80·443만 열린다.
 - Cloudflare는 [추가 설정 문서](cloudflare-manual.md)를 따른다. 현재 DuckDNS 연결은 EC2 직접 연결이다.
 - Terraform state를 보관한다. 여러 작업자가 적용하기 전에는 잠금을 지원하는 원격 저장소로 옮긴다.

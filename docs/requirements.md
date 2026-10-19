@@ -11,7 +11,7 @@ DuckDNS는 EC2 공인 IP를 자동 반영한다. Cloudflare는 수동 설정한�
 | ID | 구성 | 상태 |
 | --- | --- | --- |
 | INF-NET-01 | `openstudy.duckdns.org`에 EC2 공인 IP 자동 반영 | 삭제 전 실환경 DNS와 EC2 공인 IP 일치 확인 |
-| INF-NET-02 | 웹 서버의 HTTPS 인증서와 리디렉션 | 후속 작업 |
+| INF-NET-02 | CloudFront 정적 HTTPS·EC2 API 원본 TLS | 배포 설계 반영·구현 후속 |
 | INF-NET-03 | cloudflared 설치와 수동 Tunnel 연결 | 서버 코드 준비·연결 전 |
 | INF-NET-04 | Cloudflare WAF·요청 제한 | 연결 조건 확인 필요 |
 | INF-NET-05 | 기본 인바운드 차단·선택한 80·443 허용·Session Manager | 코드·모의 테스트 완료 |
@@ -21,6 +21,13 @@ DuckDNS는 EC2 공인 IP를 자동 반영한다. Cloudflare는 수동 설정한�
 
 DNS는 사용자 요청에 따라 DuckDNS로 구성한다. 관리 접속은 SSH 대신 Session Manager를 사용한다.
 INF-NET-04와 INF-SRV-03은 [원문 명세](https://docs.google.com/document/d/1RMxQHpqLZzPtN-OPuPSDGE3THKxtgHXNu4XbcZmbFSA/edit?tab=t.0)의 권장 항목이다.
+
+## 추가 배포 범위
+
+[Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 S3·CloudFront로 제공하도록 설계한다.
+[Backend](https://github.com/OpenStudyService/OpenStudy-Backend)는 GitHub Actions에서 ARM64 OCI 이미지를 빌드해 ECR에 저장하고 EC2에서 실행하도록 설계한다.
+S3·CloudFront·ECR·OIDC 배포 역할과 Actions 워크플로는 아직 구현하지 않았다.
+구현 순서는 [배포 설계](deployment.md)를 따른다.
 
 ## 로컬 검증
 
@@ -46,8 +53,8 @@ S3 버킷, RDS·Aurora, DynamoDB, EBS와 관련 스냅샷·백업은 남아 있�
 ## 다음 순서
 
 1. [구축 절차](setup.md)로 AWS·DuckDNS 실제 연결을 확인한다.
-2. 웹 서버, Gateway·Service 이미지와 Compose 파일을 작성한다.
-3. HTTPS 응답과 외부 포트 차단을 확인한다.
+2. S3·CloudFront 정적 호스팅과 Backend OCI·ECR 배포를 구현한다.
+3. `/api/*` 원본 HTTPS·세션·CSRF·SSE와 외부 포트 차단을 확인한다.
 4. [Cloudflare 연결 조건](cloudflare-manual.md)을 확인하고 수동 설정한다.
 5. [GitOps 자동 배포](gitops.md)를 구현한다.
 6. 사용을 마치면 [AWS 전체 정리](teardown.md)로 리소스와 저장 데이터를 삭제한다.

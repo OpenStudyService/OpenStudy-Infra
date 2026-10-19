@@ -36,14 +36,17 @@ terraform -chdir=terraform/aws state list
 state 목록에 관리 리소스가 남아 있지 않은지 확인한다.
 현재 구성은 EC2·루트 EBS·VPC·서브넷·라우팅·보안 그룹·IAM·SSM 문서와 실행 연결을 삭제한다.
 
-## 3. S3·DB·백업 확인
+## 3. S3·CloudFront·ECR·DB·백업 확인
 
-현재 이 저장소에는 S3와 DB 생성 코드가 없다.
+현재 이 저장소에는 S3·CloudFront·ECR과 DB 생성 코드가 없다.
 별도로 생성했다면 Terraform으로 가져와 같은 삭제 범위에 포함한다.
 
 | 대상 | 전체 삭제 기준 |
 | --- | --- |
 | S3 | 버킷의 객체와 이전 버전까지 삭제한다. Terraform 버킷에 `force_destroy = true`를 적용한다. |
+| CloudFront·OAC | 배포 비활성화가 완료된 뒤 배포와 OAC를 삭제한다. S3 원본 삭제와의 의존성을 구성한다. |
+| Amazon ECR | 태그가 없는 이미지를 포함해 모든 이미지와 리포지토리를 삭제한다. |
+| 배포 인증 | 프로젝트가 생성·소유한 GitHub OIDC Provider, IAM Role과 정책을 삭제한다. |
 | RDS·Aurora | 삭제 방지를 해제한다. 최종 스냅샷과 자동 백업을 남기지 않는다. 기존 수동 스냅샷도 삭제한다. |
 | DynamoDB | 테이블과 별도 생성한 백업을 삭제한다. |
 | EBS | 종료한 서버의 디스크와 별도 스냅샷이 남아 있지 않은지 확인한다. |

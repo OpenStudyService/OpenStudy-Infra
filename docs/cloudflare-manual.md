@@ -20,7 +20,7 @@ DuckDNS에서 필요한 DNS 설정과 소유권·인증서 검증이 가능한�
 
 1. Cloudflare 대시보드의 Tunnels에서 `openstudy-prod`를 생성한다.
 2. cloudflared 실행 토큰을 확인한다.
-3. Gateway 연결 대상을 `http://127.0.0.1:8080`으로 설정한다.
+3. Backend 연결 대상을 `http://127.0.0.1:8080`으로 설정한다.
 
 EC2에는 cloudflared가 설치되어 있으므로 설치 명령을 중복 실행하지 않는다.
 
@@ -47,4 +47,4 @@ sudo systemctl status cloudflared --no-pager
 
 대시보드에서 Tunnel의 Healthy 상태를 확인한다.
 그다음 공개 호스트명, HTTPS 인증서와 WAF 적용을 확인한다.
-Gateway를 아직 배포하지 않았다면 정상 웹 응답 확인은 후속 작업으로 남긴다.
+Backend를 아직 배포하지 않았다면 정상 웹 응답 확인은 후속 작업으로 남긴다.
