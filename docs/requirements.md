@@ -11,7 +11,7 @@ DuckDNS는 EC2 공인 IP를 자동 반영한다. Cloudflare는 수동 설정한�
 | ID | 구성 | 상태 |
 | --- | --- | --- |
 | INF-NET-01 | `openstudy.duckdns.org`에 EC2 공인 IP 자동 반영 | 삭제 전 실환경 DNS와 EC2 공인 IP 일치 확인 |
-| INF-NET-02 | CloudFront 정적 HTTPS·EC2 API 원본 TLS | CloudFront Deployed·정적 파일 게시 전, API 원본 TLS 후속 |
+| INF-NET-02 | CloudFront 정적 HTTPS·EC2 API 원본 TLS | CloudFront 생성·전체 삭제 검증 완료, API 원본 TLS 후속 |
 | INF-NET-03 | cloudflared 설치와 수동 Tunnel 연결 | 서버 코드 준비·연결 전 |
 | INF-NET-04 | Cloudflare WAF·요청 제한 | 연결 조건 확인 필요 |
 | INF-NET-05 | 기본 인바운드 차단·선택한 80·443 허용·Session Manager | 코드·모의 테스트 완료 |
@@ -53,8 +53,11 @@ EC2 루트 EBS와 별도 등록한 DuckDNS 토큰도 삭제했다.
 
 이후 `terraform/frontend`로 S3·CloudFront·OIDC 배포 역할 등 12개 리소스를 생성했다.
 Terraform 1.10.0으로 실제 AWS를 다시 조회했고 `No changes`를 확인했다.
-CloudFront는 `Deployed` 상태다. S3 객체는 0개로 정적 파일 게시 전이다.
-Frontend 자동 배포는 PR #2 병합과 Actions 변수 등록이 필요하다.
+CloudFront의 `Deployed` 상태와 S3 객체 0개를 확인했다.
+이후 사용자 요청으로 Frontend 리소스 12개를 모두 삭제했다.
+AWS API에서도 S3·CloudFront 구성·IAM 배포 역할·OIDC Provider 삭제를 확인했다.
+현재 `terraform/aws`와 `terraform/frontend` state의 관리 리소스는 모두 0개다.
+다음 Frontend 배포는 PR #2 병합, 인프라 재생성과 새 Actions 변수 등록이 필요하다.
 
 ```sh
 ./scripts/validate.sh
@@ -62,7 +65,7 @@ Frontend 자동 배포는 PR #2 병합과 Actions 변수 등록이 필요하다.
 
 ## 다음 순서
 
-1. [Frontend 배포 순서](frontend-deployment.md)에 따라 PR을 병합하고 Actions 변수를 등록해 정적 파일을 게시한다.
+1. [Frontend 배포 순서](frontend-deployment.md)에 따라 PR 병합, 인프라 재생성, 새 Actions 변수 등록 후 정적 파일을 게시한다.
 2. Backend를 배포할 때 [구축 절차](setup.md)로 EC2·DuckDNS를 재생성한다. OCI·ECR 배포는 후속 구현한다.
 3. `/api/*` 원본 HTTPS·세션·CSRF·SSE와 외부 포트 차단을 확인한다.
 4. [Cloudflare 연결 조건](cloudflare-manual.md)을 확인하고 수동 설정한다.
