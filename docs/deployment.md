@@ -10,7 +10,10 @@ Terraform은 인프라를 관리한다. GitHub Actions는 정적 파일과 OCI �
 
 ![Terraform IaC와 Frontend·Backend 배포 통합 아키텍처](images/openstudy-terraform-deployment-numbered.png)
 
-[SVG 원본](images/openstudy-terraform-deployment-numbered.svg) · [HTML 원본](images/openstudy-terraform-deployment-numbered.html)
+[draw.io 편집 파일](images/openstudy-terraform-deployment-numbered.drawio) · [SVG 미리보기](images/openstudy-terraform-deployment-numbered.svg) · [HTML 미리보기](images/openstudy-terraform-deployment-numbered.html)
+
+draw.io에서 **파일 → 열기 → 기기**를 선택해 `.drawio` 파일을 연다.
+아이콘·영역·연결선·번호를 각각 편집할 수 있다. 번호는 20px로 작게 표시한다.
 
 실선은 코드가 있는 경로다. 긴 점선은 후속 연결이다. 짧은 점선은 Terraform 제어다.
 표기는 코드 기준이다. 현재 동작 중인 서비스를 뜻하지 않는다. 기존 구성요소 번호를 유지한다.

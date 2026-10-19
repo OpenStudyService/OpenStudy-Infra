@@ -8,6 +8,8 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terra
 
 ![Terraform IaC 통합 배포 아키텍처](docs/images/openstudy-terraform-deployment-numbered.png)
 
+[draw.io 편집 파일](docs/images/openstudy-terraform-deployment-numbered.drawio)을 내려받아 draw.io에서 연다.
+
 번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
 실선은 코드가 있는 경로, 긴 점선은 후속 연결, 짧은 점선은 Terraform 제어다.
 현재 AWS 리소스는 모두 삭제한 상태다. Backend OCI·ECR 경로는 후속 구현이다.
