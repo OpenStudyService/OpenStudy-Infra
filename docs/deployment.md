@@ -29,7 +29,7 @@ Terraform은 인프라를 관리한다. GitHub Actions는 정적 파일과 OCI �
 | 15 | AWS IAM·AWS STS — Frontend main만 OIDC 배포 역할을 사용한다. STS가 단기 자격 증명을 발급한다. |
 | 16 | 사용자 브라우저 — CloudFront 기본 HTTPS 주소로 정적 화면과 API를 호출한다. |
 
-아이콘은 [AWS 공식 아키텍처 아이콘](https://aws.amazon.com/architecture/icons/)을 사용한다.
+아이콘은 [AWS 공식 아키텍처 아이콘](https://aws.amazon.com/architecture/icons/), [GitHub 공식 로고](https://brand.github.com/foundations/logo), [HashiCorp Terraform 공식 로고](https://www.hashicorp.com/en/brand/hcp-product-logos)를 사용한다.
 03·04는 단일 퍼블릭 서브넷을 사용하는 VPC 영역으로 묶었다. 05·06과 07·08은 같은 관리 범위로 묶었다.
 
 ## 2. Terraform 관리 범위
