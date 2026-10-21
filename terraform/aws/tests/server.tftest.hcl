@@ -28,6 +28,7 @@ variables {
   enable_duckdns      = true
   duckdns_subdomain   = "openstudy"
   web_ingress_cidrs   = []
+  enable_frontend     = false
 }
 
 run "server_security" {
@@ -158,4 +159,51 @@ run "configuration_update_keeps_server" {
     condition     = strcontains(aws_ssm_document.server.content, "/download/2026.10.2/") && !strcontains(aws_ssm_document.server.content, "/download/2026.10.1/")
     error_message = "The configuration change must be delivered through the SSM document."
   }
+}
+
+run "duckdns_static_hosting" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    frontend_source_dir = "../frontend/tests/fixtures/frontend"
+  }
+  assert {
+    condition     = output.frontend_url == "https://openstudy.duckdns.org" && strcontains(local.user_data, "caddy:2.11.7-alpine") && strcontains(local.user_data, "systemctl start openstudy-duckdns.service") && strcontains(local.frontend_caddyfile, "root * /srv/openstudy/current")
+    error_message = "The DuckDNS website must configure Caddy HTTPS and update DNS before starting the web server."
+  }
+  assert {
+    condition     = length(terraform_data.frontend_deployment) == 1 && aws_s3_bucket.frontend_artifacts[0].force_destroy && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_acls && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_policy
+    error_message = "Static hosting must publish through a private artifact bucket that is deleted with the stack."
+  }
+}
+
+run "reject_static_hosting_without_public_https" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    frontend_source_dir = "../frontend/tests/fixtures/frontend"
+  }
+  expect_failures = [aws_instance.server]
+}
+
+run "reject_static_hosting_without_checkout" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    frontend_source_dir = "tests/missing-frontend"
+  }
+  expect_failures = [terraform_data.frontend_deployment[0]]
+}
+
+run "reject_long_artifact_bucket_name" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    name_prefix         = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    frontend_source_dir = "../frontend/tests/fixtures/frontend"
+  }
+  expect_failures = [aws_s3_bucket.frontend_artifacts[0]]
 }

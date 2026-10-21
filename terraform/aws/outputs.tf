@@ -39,3 +39,8 @@ output "server_configuration_association_id" {
   description = "State Manager association that applies the Terraform server configuration."
   value       = aws_ssm_association.server.association_id
 }
+
+output "frontend_url" {
+  description = "HTTPS static website served directly by the EC2 instance through DuckDNS."
+  value       = var.enable_frontend ? "https://${local.frontend_hostname}" : null
+}

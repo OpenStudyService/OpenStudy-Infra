@@ -127,3 +127,46 @@ if systemctl cat openstudy-duckdns.timer >/dev/null 2>&1; then
   systemctl stop openstudy-duckdns.service
 fi
 %{ endif ~}
+
+%{ if enable_frontend ~}
+install -d -m 0755 /srv/openstudy /srv/openstudy/releases /srv/openstudy/assets
+install -d -m 0700 /var/lib/openstudy-caddy/data /var/lib/openstudy-caddy/config
+cat > /etc/openstudy/Caddyfile <<'CADDYFILE'
+${frontend_caddyfile}
+CADDYFILE
+chmod 0644 /etc/openstudy/Caddyfile
+
+# DNS must point at this instance before the ACME certificate checks begin.
+systemctl start openstudy-duckdns.service
+docker pull '${frontend_caddy_image}'
+docker run --rm --entrypoint caddy \
+  -v /etc/openstudy/Caddyfile:/etc/caddy/Caddyfile:ro \
+  '${frontend_caddy_image}' validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+cat > /etc/systemd/system/openstudy-web.service <<'WEB_UNIT'
+[Unit]
+Description=OpenStudy DuckDNS HTTPS static website
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker rm -f openstudy-web
+ExecStart=/usr/bin/docker run --rm --name openstudy-web --network host --read-only --cap-drop ALL --cap-add NET_BIND_SERVICE --security-opt no-new-privileges --tmpfs /tmp:size=16m -v /etc/openstudy/Caddyfile:/etc/caddy/Caddyfile:ro -v /srv/openstudy:/srv/openstudy:ro -v /var/lib/openstudy-caddy/data:/data -v /var/lib/openstudy-caddy/config:/config ${frontend_caddy_image}
+ExecStop=/usr/bin/docker stop -t 10 openstudy-web
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+WEB_UNIT
+systemctl daemon-reload
+systemctl enable openstudy-web
+systemctl restart openstudy-web
+%{ else ~}
+if systemctl cat openstudy-web.service >/dev/null 2>&1; then
+  systemctl disable --now openstudy-web.service
+fi
+%{ endif ~}

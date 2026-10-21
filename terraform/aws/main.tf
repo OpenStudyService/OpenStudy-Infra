@@ -14,6 +14,9 @@ locals {
     duckdns_subdomain     = var.duckdns_subdomain
     duckdns_path          = local.duckdns_path
     duckdns_update_script = file("${path.module}/../../scripts/duckdns-update.py")
+    enable_frontend       = var.enable_frontend
+    frontend_caddy_image  = var.frontend_caddy_image
+    frontend_caddyfile    = local.frontend_caddyfile
   })
 }
 
@@ -188,6 +191,11 @@ resource "aws_instance" "server" {
     precondition {
       condition     = var.free_tier_confirmed
       error_message = "Check the AWS account plan, remaining credits and instance eligibility, then set free_tier_confirmed=true."
+    }
+
+    precondition {
+      condition     = !var.enable_frontend || (var.enable_duckdns && contains(var.web_ingress_cidrs, "0.0.0.0/0"))
+      error_message = "DuckDNS static hosting requires enable_duckdns = true and public HTTP/HTTPS via web_ingress_cidrs = [\"0.0.0.0/0\"]."
     }
   }
 

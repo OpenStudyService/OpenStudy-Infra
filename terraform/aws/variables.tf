@@ -107,3 +107,26 @@ variable "web_ingress_cidrs" {
     error_message = "Use IPv4 CIDR ranges, or an empty list for no inbound web access."
   }
 }
+
+variable "enable_frontend" {
+  description = "Serve and deploy the live Frontend over HTTPS at the DuckDNS hostname."
+  type        = bool
+  default     = false
+}
+
+variable "frontend_source_dir" {
+  description = "Frontend checkout path. Null uses the sibling OpenStudy-Frontend checkout."
+  type        = string
+  default     = null
+}
+
+variable "frontend_caddy_image" {
+  description = "Pinned official Caddy image used for static hosting and automatic HTTPS."
+  type        = string
+  default     = "caddy:2.11.7-alpine"
+
+  validation {
+    condition     = can(regex("^caddy:[0-9]+\\.[0-9]+\\.[0-9]+-alpine$", var.frontend_caddy_image))
+    error_message = "Use an explicit official Caddy version, such as caddy:2.11.7-alpine."
+  }
+}

@@ -9,3 +9,8 @@ cloudflared_version   = "2026.10.1"
 enable_duckdns        = true
 duckdns_subdomain     = "openstudy"
 web_ingress_cidrs     = []
+
+# To serve the static Frontend directly at the DuckDNS HTTPS hostname:
+# enable_frontend = true
+# web_ingress_cidrs = ["0.0.0.0/0"]
+# frontend_source_dir = "/absolute/path/to/OpenStudy-Frontend"
