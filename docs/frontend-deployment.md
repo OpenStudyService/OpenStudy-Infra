@@ -14,14 +14,14 @@ GitHub Actions 배포는 선택 사항이다. 운영 API 연결은 별도로 진
 ## 1. AWS와 변수 준비
 
 [AWS 인증](aws-configure.md)을 먼저 설정한다. 아래 명령은 OpenStudy-Infra에서 실행한다.
-Terraform은 **1.10.0**을 사용한다. tfenv는 저장소의 `.terraform-version`을 자동으로 읽는다.
+Terraform은 **1.16.6**을 사용한다. tfenv는 저장소의 `.terraform-version`을 자동으로 읽는다.
 
 ```sh
 tfenv install
 terraform version
 ```
 
-첫 줄이 `Terraform v1.10.0`인지 확인한다. 변수 파일은 없을 때만 복사한다.
+첫 줄이 `Terraform v1.16.6`인지 확인한다. 변수 파일은 없을 때만 복사한다.
 
 ```sh
 aws sts get-caller-identity

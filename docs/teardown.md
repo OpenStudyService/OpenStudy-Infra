@@ -42,7 +42,8 @@ state 목록에 관리 리소스가 남아 있지 않은지 확인한다.
 
 ## 3. S3·CloudFront·ECR·DB·백업 확인
 
-S3·CloudFront·OIDC 배포 역할은 `terraform/frontend`로 생성·삭제한다.
+DuckDNS 경로의 배포용 S3는 `terraform/aws`로 생성·삭제한다.
+S3·CloudFront·OIDC 배포 역할의 선택 경로는 `terraform/frontend`로 생성·삭제한다.
 현재 이 저장소에는 ECR과 DB 생성 코드가 없다.
 별도로 생성했다면 Terraform으로 가져와 같은 삭제 범위에 포함한다.
 
@@ -56,7 +57,8 @@ S3·CloudFront·OIDC 배포 역할은 `terraform/frontend`로 생성·삭제한�
 | DynamoDB | 테이블과 별도 생성한 백업을 삭제한다. |
 | EBS | 종료한 서버의 디스크와 별도 스냅샷이 남아 있지 않은지 확인한다. |
 
-설정을 변경했다면 삭제 계획을 만들기 전에 일반 `plan`과 `apply`로 반영한다.
+기존 리소스의 삭제 설정을 변경해야 한다면 일반 `plan`에서 대상을 확인한 뒤 필요한 변경만 적용한다.
+state가 비어 있으면 삭제를 위해 리소스를 다시 생성하지 않는다.
 Terraform이 관리하지 않는 리소스는 `destroy`로 삭제되지 않는다.
 기준은 [Terraform 삭제 안내](https://developer.hashicorp.com/terraform/cli/commands/destroy), [S3 삭제 설정](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket#force_destroy), [RDS 삭제 안내](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_DeleteInstance.html)를 따른다.
 

@@ -10,7 +10,7 @@ EC2의 Caddy가 HTTPS 인증서를 발급·갱신하고 React 빌드 파일을 �
 
 ## 1. 토큰과 실행 환경 준비
 
-Terraform 1.10.0, Node.js 24, npm, Python 3.9 이상, AWS CLI v2와 curl을 사용한다.
+Terraform 1.16.6, Node.js 24, npm, Python 3.9 이상, AWS CLI v2와 curl을 사용한다.
 `OpenStudy-Frontend`를 `OpenStudy-Infra`와 같은 상위 폴더에 둔다.
 
 DuckDNS에서 `openstudy.duckdns.org`을 소유한 계정으로 로그인한다.

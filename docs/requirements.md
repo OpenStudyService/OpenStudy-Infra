@@ -24,7 +24,7 @@ INF-NET-04와 INF-SRV-03은 [원문 명세](https://docs.google.com/document/d/1
 
 ## 추가 배포 범위
 
-[Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 S3·CloudFront로 제공한다.
+[Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 기본으로 DuckDNS·EC2 Caddy로 제공한다. S3·CloudFront는 별도 선택 경로다.
 [Backend](https://github.com/OpenStudyService/OpenStudy-Backend)는 GitHub Actions에서 ARM64 OCI 이미지를 빌드해 ECR에 저장하고 EC2에서 실행하도록 설계한다.
 Frontend의 S3·CloudFront·OIDC 역할과 Actions 워크플로 코드를 추가했다.
 `terraform/frontend apply`는 기본으로 로컬 Frontend 검사·live 빌드·S3 게시·CloudFront 확인까지 실행한다.
@@ -35,7 +35,7 @@ Backend ECR·OCI 배포 워크플로는 아직 구현하지 않았다.
 
 ## 로컬 검증
 
-Terraform 버전은 1.10.0으로 고정한다.
+Terraform 버전은 1.16.6으로 고정한다.
 2026-10-19에 AWS 모의 테스트 8개, 이전 Cloudflare 예제 테스트 5개와 Python 테스트 9개를 통과했다.
 Frontend Terraform 모의 테스트 5개와 SPA 경로 테스트 3개도 통과했다.
 Frontend 저장소의 검사·live 빌드와 배포 절차 테스트 3개를 통과했다. 당시 실제 AWS 정적 웹 배포는 실행 전이었다.
@@ -102,6 +102,17 @@ DuckDNS A·AAAA 기록을 비웠고 AWS에 저장한 프로젝트 토큰도 삭�
 Terraform 모의 테스트 25개, Node.js 테스트 12개와 Python 테스트 20개를 통과했다.
 ARM·x86 서버 설정은 정적 웹 활성화·비활성화 조합 4개에서 구문과 크기 검사를 통과했다.
 이 검증에서는 실제 AWS 리소스를 생성하거나 변경하지 않았다.
+
+같은 날 실행 버전과 현재 문서를 최신화했다.
+Terraform CLI를 1.16.6, Cloudflare 공급자를 5.28.1, cloudflared를 2026.10.2로 갱신했다.
+AWS 공급자 6.69.1과 Caddy 2.11.7-alpine은 유지했다.
+cloudflared 2026.10.1에서 2026.10.2로 설정을 바꿀 때 기존 EC2를 유지하는 모의 테스트도 통과했다.
+새 버전에서 Terraform 모의 테스트 25개, Node.js 테스트 12개, Python 테스트 20개와 서버 설정 조합 4개의 구문·크기 검사를 통과했다.
+실제 AWS 조회 계획은 `terraform/aws` 생성 21개와 `terraform/frontend` 생성 13개다. 두 계획 모두 수정·삭제는 0개다.
+게시 작업을 포함한 리소스 주소와 작업 종류는 갱신 전 계획과 같다.
+계획은 각 Terraform 버전으로 읽어 비교했다. 이전 버전의 계획 파일은 적용하지 않는다.
+기본 DuckDNS·EC2 아키텍처의 HTML·SVG·PNG·draw.io 파일을 추가했다. 기존 CloudFront 그림은 선택 경로로 보존했다.
+그림의 글자 잘림·모바일 스크롤·문서 링크를 확인했다. 이 검증에서는 AWS 적용을 실행하지 않았다.
 
 ```sh
 ./scripts/validate.sh

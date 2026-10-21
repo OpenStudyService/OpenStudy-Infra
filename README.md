@@ -6,22 +6,37 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend 정적 웹 배포를 Terraform으
 
 ## 통합 아키텍처와 배포 흐름
 
-![Terraform IaC 통합 배포 아키텍처](docs/images/openstudy-terraform-deployment-numbered.png)
+![DuckDNS·EC2 기본 배포 아키텍처](docs/images/openstudy-duckdns-deployment-numbered.png)
 
-[draw.io 편집 파일](docs/images/openstudy-terraform-deployment-numbered.drawio)을 내려받아 draw.io에서 연다.
+[draw.io 편집 파일](docs/images/openstudy-duckdns-deployment-numbered.drawio)을 내려받아 draw.io에서 연다.
+S3·CloudFront 선택 경로는 [별도 그림](docs/images/openstudy-terraform-deployment-numbered.html)을 따른다.
 
 번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
-실선은 코드가 있는 경로, 긴 점선은 후속 연결, 짧은 점선은 Terraform 제어다.
+실선은 정적 파일과 접속 경로, 짧은 점선은 Terraform·SSM 제어다.
 2026-10-21에 DuckDNS 정적 웹 배포를 확인한 뒤 사용자 요청으로 전체 삭제했다. 현재 웹 서비스는 중지 상태다.
-DuckDNS 직접 연결은 [EC2 기반 정적 웹 배포](docs/duckdns-frontend.md)를 따른다. 위 그림은 S3·CloudFront 선택 경로다.
+DuckDNS 직접 연결은 [EC2 기반 정적 웹 배포](docs/duckdns-frontend.md)를 따른다.
 Backend OCI·ECR 경로는 후속 구현이다.
 
 ## 실행 환경
 
-Terraform은 **1.10.0**으로 고정한다. 저장소의 `.terraform-version`을 따른다.
+Terraform은 **1.16.6**으로 고정한다. 저장소의 `.terraform-version`을 따른다.
 tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 준비한다.
-`terraform version`의 첫 줄이 `Terraform v1.10.0`인지 확인한다.
+`terraform version`의 첫 줄이 `Terraform v1.16.6`인지 확인한다.
 계획 생성과 적용은 같은 버전으로 실행한다. 버전이나 변수를 바꾸면 계획을 다시 생성한다.
+
+2026-10-21 기준 고정 버전은 다음과 같다.
+
+| 구성 | 버전 | 공식 릴리스 |
+| --- | --- | --- |
+| Terraform CLI | 1.16.6 | [릴리스](https://github.com/hashicorp/terraform/releases/tag/v1.16.6) |
+| AWS 공급자 | 6.69.1 | [릴리스](https://github.com/hashicorp/terraform-provider-aws/releases/tag/v6.69.1) |
+| Cloudflare 공급자 | 5.28.1 | [릴리스](https://github.com/cloudflare/terraform-provider-cloudflare/releases/tag/v5.28.1) |
+| cloudflared | 2026.10.2 | [릴리스](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.2) |
+| Caddy | 2.11.7-alpine | [릴리스](https://github.com/caddyserver/caddy/releases/tag/v2.11.7) |
+
+공급자는 각 스택의 `.terraform.lock.hcl`을 따른다.
+기존 로컬 변수 파일에 `cloudflared_version`이 있으면 `2026.10.2`로 갱신한다.
+이전 Terraform 버전으로 만든 계획 파일은 다시 사용하지 않는다.
 
 ## 기본 구성
 
@@ -49,7 +64,7 @@ GitHub Actions로 게시할 때는 `deploy_frontend = false`를 설정한다.
 
 Backend OCI·ECR 자동 배포는 구현 예정이다.
 
-- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 S3·CloudFront로 제공한다. IaC와 Actions 코드를 추가했다.
+- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 DuckDNS·EC2 Caddy로 제공한다. S3·CloudFront는 별도 선택 경로다.
 - [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): GitHub Actions에서 ARM64 OCI 이미지를 빌드해 Amazon ECR에 저장한다. EC2가 이미지를 가져와 실행한다.
 - GitHub OIDC로 AWS 배포 역할을 사용한다. 사용 후 S3·CloudFront·ECR도 전체 삭제한다.
 

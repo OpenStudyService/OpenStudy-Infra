@@ -3,7 +3,7 @@
 [README로 돌아가기](../README.md)
 
 DuckDNS 등록 → AWS 확인 → 변수 설정 → EC2 생성 → 토큰 저장 → 연결 확인 순서로 진행한다.
-Git, AWS CLI v2, Terraform 1.10.0, Python 3.9 이상과 Bash를 준비한다.
+Git, AWS CLI v2, Terraform 1.16.6, Python 3.9 이상과 Bash를 준비한다.
 Terraform 버전은 [실행 환경](../README.md#실행-환경)을 따른다.
 
 ## 1. DuckDNS 등록

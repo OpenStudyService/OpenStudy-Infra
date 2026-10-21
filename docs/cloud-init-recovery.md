@@ -5,10 +5,10 @@
 ## 1. 변수 수정
 
 `2035.10.1` 다운로드의 404 오류는 버전 오타다.
-로컬 `terraform/aws/terraform.tfvars`에서 확인한 [공식 배포 버전](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.1)으로 수정한다.
+로컬 `terraform/aws/terraform.tfvars`에서 확인한 [공식 배포 버전](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.2)으로 수정한다.
 
 ```hcl
-cloudflared_version = "2026.10.1"
+cloudflared_version = "2026.10.2"
 ```
 
 ## 2. Terraform 적용
