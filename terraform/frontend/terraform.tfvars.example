@@ -3,6 +3,11 @@ aws_region        = "ap-northeast-2"
 name_prefix       = "openstudy-prod"
 github_repository = "OpenStudyService/OpenStudy-Frontend"
 
+# apply builds and publishes the sibling OpenStudy-Frontend checkout by default.
+# frontend_source_dir = "/absolute/path/to/OpenStudy-Frontend"
+# Set false when publishing only through GitHub Actions.
+# deploy_frontend = false
+
 # Set this when the AWS account already has the GitHub OIDC provider.
 # github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 

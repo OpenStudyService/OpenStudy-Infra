@@ -24,7 +24,8 @@ mock_provider "aws" {
 }
 
 variables {
-  aws_account_id = "123456789012"
+  aws_account_id  = "123456789012"
+  deploy_frontend = false
 }
 
 run "private_static_site" {
@@ -96,4 +97,36 @@ run "reject_url_as_api_hostname" {
     api_origin_domain_name = "https://openstudy.duckdns.org/api"
   }
   expect_failures = [var.api_origin_domain_name]
+}
+
+run "plan_local_frontend_deployment" {
+  command = plan
+  variables {
+    deploy_frontend     = true
+    frontend_source_dir = "tests/fixtures/frontend"
+  }
+  assert {
+    condition     = length(terraform_data.frontend_deployment) == 1 && contains(keys(local.frontend_source_hashes), "src/main.ts") && contains(keys(local.frontend_source_hashes), ".env.live") && contains(keys(local.frontend_source_hashes), "scripts/deploy-static.sh")
+    error_message = "Local publication must track the app, live configuration, and publisher."
+  }
+}
+
+run "infrastructure_only_without_frontend_checkout" {
+  command = plan
+  variables {
+    frontend_source_dir = "tests/fixtures/missing-frontend"
+  }
+  assert {
+    condition     = length(terraform_data.frontend_deployment) == 0 && length(local.frontend_source_hashes) == 0
+    error_message = "Infrastructure-only deployment must not require or publish Frontend sources."
+  }
+}
+
+run "reject_missing_frontend_checkout" {
+  command = plan
+  variables {
+    deploy_frontend     = true
+    frontend_source_dir = "tests/fixtures/missing-frontend"
+  }
+  expect_failures = [terraform_data.frontend_deployment[0]]
 }

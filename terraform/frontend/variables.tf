@@ -24,6 +24,23 @@ variable "name_prefix" {
   }
 }
 
+variable "deploy_frontend" {
+  description = "Build and publish the local Frontend during apply. Disable when GitHub Actions owns publication."
+  type        = bool
+  default     = true
+}
+
+variable "frontend_source_dir" {
+  description = "Frontend checkout path. Null uses OpenStudy-Frontend beside OpenStudy-Infra. Relative paths start at terraform/frontend."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.frontend_source_dir == null || try(trimspace(var.frontend_source_dir) != "", false)
+    error_message = "Use a non-empty Frontend checkout path, or null for the sibling checkout."
+  }
+}
+
 variable "github_repository" {
   description = "Only this repository can assume the frontend publishing role."
   type        = string

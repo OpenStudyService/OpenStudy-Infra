@@ -13,6 +13,7 @@ override.tf.json
 *_override.tf.json
 .env
 .env.*
+!terraform/frontend/tests/fixtures/frontend/.env.live
 *.pem
 *.key
 __pycache__/
