@@ -22,6 +22,7 @@ EC2는 `disable_api_termination = false`를 사용한다.
 
 Frontend 정적 호스팅을 생성했다면 먼저 [Frontend 전체 삭제](frontend-deployment.md#6-사용-후-전체-삭제)를 실행한다.
 `terraform/aws`와 `terraform/frontend`의 state는 분리되어 있다. 한쪽 삭제가 다른 쪽 리소스를 삭제하지 않는다.
+DuckDNS 정적 웹을 사용하면 `terraform/aws` 삭제에 EC2의 웹 파일·인증서와 비공개 S3 배포 파일 버킷도 포함한다.
 
 저장소 루트에서 삭제 계획을 만든다.
 

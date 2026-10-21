@@ -1,7 +1,7 @@
 # OpenStudy-Infra
 
-OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terraform으로 관리한다.
-`openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결한다.
+OpenStudy의 AWS 네트워크·EC2와 Frontend 정적 웹 배포를 Terraform으로 관리한다.
+`openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결하고 HTTPS 정적 웹을 제공한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
 ## 통합 아키텍처와 배포 흐름
@@ -12,7 +12,9 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terra
 
 번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
 실선은 코드가 있는 경로, 긴 점선은 후속 연결, 짧은 점선은 Terraform 제어다.
-현재 AWS 리소스는 모두 삭제한 상태다. Backend OCI·ECR 경로는 후속 구현이다.
+2026-10-21에 DuckDNS 정적 웹 배포를 확인한 뒤 사용자 요청으로 전체 삭제했다. 현재 웹 서비스는 중지 상태다.
+DuckDNS 직접 연결은 [EC2 기반 정적 웹 배포](docs/duckdns-frontend.md)를 따른다. 위 그림은 S3·CloudFront 선택 경로다.
+Backend OCI·ECR 경로는 후속 구현이다.
 
 ## 실행 환경
 
@@ -31,10 +33,17 @@ tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 �
 
 ## Frontend 정적 웹 자동 배포
 
+DuckDNS 주소는 `terraform/aws`에서 `enable_frontend = true`로 배포한다.
+EC2의 Caddy가 HTTPS와 정적 파일을 제공한다. 비공개 S3는 배포 압축 파일 전달에 사용한다.
+실제 실행과 전체 삭제는 [DuckDNS 정적 웹 배포](docs/duckdns-frontend.md)를 따른다.
+
 `terraform/frontend`는 EC2와 별도 state로 S3·CloudFront·OAC와 GitHub OIDC 배포 역할을 관리한다.
-Frontend의 GitHub Actions는 검사·live 빌드·S3 게시·캐시 갱신을 실행한다.
+기본 `apply`는 로컬 Frontend의 검사·live 빌드·S3 게시·캐시 갱신까지 실행한다.
+Node.js 24·npm·AWS CLI와 같은 상위 폴더의 `OpenStudy-Frontend` 저장소가 필요하다.
+`frontend_source_dir`로 다른 소스 위치를 지정할 수 있다.
+GitHub Actions로 게시할 때는 `deploy_frontend = false`를 설정한다.
 실제 AWS 생성과 배포는 **[Frontend 자동 배포 순서](docs/frontend-deployment.md)**를 따른다.
-이 코드 변경만으로 AWS 리소스를 생성하지 않는다.
+`terraform/aws apply`는 `enable_frontend = true`일 때 DuckDNS 정적 웹 게시까지 실행한다.
 
 ## Backend 배포 설계
 
@@ -110,6 +119,7 @@ DB 생성 코드는 아직 없다. 별도로 만든 리소스는 state에 포함
 - [GitOps 배포 순서](docs/gitops.md)
 - [Terraform IaC 통합 아키텍처·배포 흐름](docs/deployment.md)
 - [Frontend 자동 배포·생성·정리](docs/frontend-deployment.md)
+- [DuckDNS 정적 웹·HTTPS 배포](docs/duckdns-frontend.md)
 - [요구조건과 검증 상태](docs/requirements.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.

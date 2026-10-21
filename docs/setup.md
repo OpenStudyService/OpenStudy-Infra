@@ -130,9 +130,10 @@ EC2 중지·시작 후에는 AWS 콘솔의 현재 공인 IP와 비교한다.
 
 ## 다음 작업과 운영
 
-- 정적 웹은 [Frontend 자동 배포](frontend-deployment.md)를 따른다. `terraform/frontend`는 EC2와 별도로 생성·삭제한다.
+- DuckDNS 주소에서 정적 웹을 제공하려면 [DuckDNS 정적 웹 배포](duckdns-frontend.md)를 따른다. `enable_frontend = true`로 설정하면 이 EC2에 자동 게시한다.
+- S3·CloudFront 경로를 선택하면 [Frontend 자동 배포](frontend-deployment.md)를 따른다. `terraform/frontend`는 EC2와 별도로 생성·삭제한다.
 - Backend OCI·ECR 배포는 [추가 배포 설계](deployment.md)의 후속 작업이다.
-- 웹 접속은 CloudFront와 EC2 HTTPS 원본을 구성한 뒤 확인한다.
+- 웹 접속은 선택한 경로의 HTTPS와 정적 파일 게시를 완료한 뒤 확인한다.
 - 직접 웹 접속을 열려면 `web_ingress_cidrs = ["0.0.0.0/0"]`로 바꾸고 계획·적용을 반복한다. TCP 80·443만 열린다.
 - Cloudflare는 [추가 설정 문서](cloudflare-manual.md)를 따른다. 현재 DuckDNS 연결은 EC2 직접 연결이다.
 - Terraform state를 보관한다. 여러 작업자가 적용하기 전에는 잠금을 지원하는 원격 저장소로 옮긴다.

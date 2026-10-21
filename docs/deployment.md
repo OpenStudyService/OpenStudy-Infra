@@ -3,8 +3,12 @@
 [README로 돌아가기](../README.md)
 
 Terraform의 생성·설정·삭제와 애플리케이션의 빌드·게시·접속을 한 흐름으로 정리한다.
-Terraform은 인프라를 관리한다. GitHub Actions는 정적 파일과 OCI 이미지를 게시한다.
-**현재 AWS 리소스는 모두 삭제한 상태다.** 아래 그림은 재생성 기준과 후속 Backend 배포 목표를 함께 표시한다.
+Terraform은 인프라를 관리한다. Frontend의 기본 적용은 로컬 검사·빌드·정적 파일 게시까지 실행한다.
+GitHub Actions를 통한 Frontend 게시도 선택할 수 있다. Backend OCI 자동화는 후속 작업이다.
+**2026-10-21에 사용자 요청으로 DuckDNS 정적 웹과 관련 인프라를 전체 삭제했다. 현재 웹 서비스는 중지 상태다.**
+DuckDNS 배포 경로는 DuckDNS → EC2 Caddy → 정적 파일이다. 배포 압축 파일은 비공개 S3로 전달한다.
+실행 절차는 [DuckDNS 정적 웹 배포](duckdns-frontend.md)를 따른다.
+아래 그림은 S3·CloudFront 선택 경로와 후속 Backend 배포 목표를 표시한다.
 
 ## 1. 통합 아키텍처
 
@@ -17,10 +21,11 @@ draw.io에서 **파일 → 열기 → 기기**를 선택해 `.drawio` 파일을 
 
 실선은 코드가 있는 경로다. 긴 점선은 후속 연결이다. 짧은 점선은 Terraform 제어다.
 표기는 코드 기준이다. 현재 동작 중인 서비스를 뜻하지 않는다. 기존 구성요소 번호를 유지한다.
+그림의 Frontend 게시 경로는 Actions 기준이다. 로컬 게시에서는 Terraform 실행 환경이 같은 S3·CloudFront 작업을 수행한다.
 
 | 번호 | AWS 서비스·구성 요소와 설명 |
 | --- | --- |
-| 01 | Terraform — 1.10.0으로 plan·apply·destroy를 실행한다. 정적 파일과 OCI 이미지는 Actions가 게시한다. |
+| 01 | Terraform — 1.10.0으로 plan·apply·destroy를 실행한다. Frontend apply는 기본으로 로컬 정적 파일도 게시한다. |
 | 02 | AWS Region — 서울 리전(ap-northeast-2)이다. CloudFront와 IAM은 전역 서비스다. |
 | 03·04 | Amazon VPC·Public Subnet — 10.42.0.0/16 VPC 안에 10.42.1.0/24 퍼블릭 서브넷을 구성한다. |
 | 05·06 | Amazon EC2·Amazon EBS — t4g.small과 암호화 gp3 8GiB다. Backend 컨테이너 배포는 후속 작업이다. |
@@ -39,8 +44,8 @@ draw.io에서 **파일 → 열기 → 기기**를 선택해 `.drawio` 파일을 
 
 | Terraform 경로 | 관리 범위 | 현재 상태 |
 | --- | --- | --- |
-| terraform/frontend | 11·12·15, OAC·SPA 함수·캐시 정책·배포 역할·프로젝트 OIDC | 12개 생성·삭제 검증 완료. 현재 state 0개. |
-| terraform/aws | 02~08, Internet Gateway·라우팅·보안 그룹·SSM 실행 연결 | EC2·SSM·DuckDNS 검증 완료. 현재 state 0개. |
+| terraform/frontend | 11·12·15, OAC·SPA 함수·캐시 정책·배포 역할·프로젝트 OIDC·로컬 정적 파일 게시 | 실제 생성·게시·전체 삭제 검증 완료. 현재 state 0개. |
+| terraform/aws | 02~08, Internet Gateway·라우팅·보안 그룹·SSM 실행 연결·DuckDNS HTTPS 정적 웹·비공개 S3 배포 파일 | 실제 게시·접속 후 21개 관리 항목 전체 삭제 검증 완료. 현재 state 0개. |
 | Backend ECR·배포 IaC | 13, ECR push 역할·EC2 pull 권한·배포 설정 | 미구현. 후속으로 Terraform에 추가한다. |
 
 토큰 값은 Terraform state에 저장하지 않는다. Parameter Store SecureString에 별도로 등록한다.
@@ -50,16 +55,16 @@ DB 운영 배치와 ECR IaC는 후속 작업이다. 별도 생성한 리소스�
 ## 3. 생성부터 삭제까지
 
 1. Terraform 1.10.0과 AWS 계정을 확인한다. 기존 변수·state 파일을 보관하고 필요한 값만 수정한다.
-2. terraform/frontend의 plan을 확인하고 apply한다. S3·CloudFront·OIDC 배포 역할과 Actions 변수 5개를 준비한다.
-3. Frontend PR #2를 원본 main에 병합하고 Actions 변수를 등록한다. PR에서는 검사·빌드만 실행한다.
-4. Actions가 Node.js 24에서 검사 후 live 빌드를 실행한다. OIDC 인증 후 해시 파일·index.html을 S3에 게시한다.
-5. CloudFront 캐시 갱신 완료 후 /와 /login의 HTML을 확인한다. 이 단계까지가 Frontend 코드의 배포 흐름이다.
+2. Node.js 24·npm·AWS CLI와 로컬 Frontend를 준비한다. terraform/frontend의 plan을 확인하고 apply한다.
+3. Terraform이 S3·CloudFront를 생성한 뒤 로컬 소스를 검사·live 빌드한다. 해시 파일·index.html을 S3에 게시한다.
+4. CloudFront 캐시 갱신 완료 후 /와 /login의 HTML을 확인한다. 여기까지가 기본 Frontend 배포다.
+5. Actions를 선택하면 deploy_frontend = false로 설정한다. Frontend PR #2 병합과 Actions 변수 등록 후 main으로 워크플로를 실행한다.
 6. Backend는 terraform/aws로 EC2를 준비한다. ECR·OCI 빌드·digest 배포와 EC2 pull은 후속 구현한다.
 7. Backend HTTPS 원본을 준비한 뒤 /api와 /api/*를 연결한다. 세션·CSRF·SSE를 통합 검증한다.
 8. 사용 후 자동 게시를 중지한다. frontend와 aws를 각각 destroy하고 S3·ECR·DB·백업·프로젝트 토큰의 잔여를 확인한다.
 
 생성·삭제 명령은 같은 Terraform **1.10.0**으로 실행한다.
-버전이나 변수를 변경하면 계획 파일을 다시 만든다.
+버전·변수·Frontend 소스를 변경하면 계획 파일을 다시 만든다.
 Frontend는 [자동 배포 순서](frontend-deployment.md), EC2는 [구축 순서](setup.md), 전체 삭제는 [정리 순서](teardown.md)를 따른다.
 
 ## 4. 네트워크·배포 연결
@@ -67,6 +72,7 @@ Frontend는 [자동 배포 순서](frontend-deployment.md), EC2는 [구축 순�
 | 관련 번호 | 연결·역할 | 통신과 구현 상태 |
 | --- | --- | --- |
 | 01→AWS | 인프라 생성·삭제 | AWS API HTTPS 443. frontend와 aws의 state는 분리한다. |
+| 01→11·12 | 로컬 Frontend 게시·확인 | 기본 apply가 S3 게시·캐시 갱신·HTML 확인을 실행한다. 실행 환경의 AWS 인증을 사용한다. |
 | 01→07 | SSM 문서·실행 연결 | HTTPS 443. 서버 설정 변경은 SSM으로 적용한다. |
 | 07·08→05 | 서버 설정·토큰 조회 | 논리적 적용 방향이다. 실제 SSM·토큰 조회는 EC2의 아웃바운드 443을 사용한다. |
 | 14→15 | GitHub OIDC 인증 | HTTPS 443. 원본 저장소와 refs/heads/main으로 제한한다. |
@@ -78,18 +84,18 @@ Frontend는 [자동 배포 순서](frontend-deployment.md), EC2는 [구축 순�
 | 05→13 | ECR 이미지 pull | 미구현. HTTPS 443, EC2 IAM Role과 digest로 이미지를 가져온다. |
 | 05→외부 | DuckDNS IP 갱신 | HTTPS 443. IMDSv2로 IP를 확인해 openstudy.duckdns.org을 갱신한다. |
 
-Backend 원본 Host와 인증서는 `openstudy.duckdns.org`에 맞춘다.
-EC2의 기본 인바운드는 차단 상태다. API 원본을 연결할 때 HTTPS 인증서와 접근 허용 규칙을 함께 구성한다.
+DuckDNS 호스트명은 재배포 시 EC2의 정적 웹 접속 주소로 사용한다. Backend API 연결은 후속 작업이다.
+정적 웹에는 TCP 80·443만 공개한다. Backend를 연결할 때 원본 호스트명과 인증서를 별도로 확정한다.
 정적 SPA 경로만 `index.html`로 연결한다. API 오류에는 적용하지 않는다.
 Backend 미연결 상태의 읽기 API는 JSON 503을 반환한다.
 Backend·MySQL 내부 포트는 외부에 공개하지 않는다. MySQL 8.4의 운영 위치는 아직 확정하지 않았다.
 
 ## 5. 구현·검증 상태
 
-- Terraform: 버전 1.10.0, Infra 로컬 테스트 30개 통과, EC2와 Frontend 인프라의 생성·전체 삭제 검증 완료.
-- Frontend: Node.js 24·React·Vite, live 빌드와 테스트 검증 완료. 자동 배포 코드는 [PR #2](https://github.com/OpenStudyService/OpenStudy-Frontend/pull/2) 병합과 Actions 변수 등록이 필요하다.
+- Terraform: 버전 1.10.0, EC2와 Frontend 인프라의 생성·전체 삭제 검증 완료. 2026-10-20에 CloudFront 로컬 게시를 검증했다. 2026-10-21에는 DuckDNS·EC2 정적 웹 게시를 검증한 뒤 관리 항목 21개를 모두 삭제했다.
+- Frontend: Node.js 24·React·Vite, live 빌드와 테스트 검증 완료. 배포 당시 CloudFront에서 실제 로그인 화면을 확인했다. Actions 배포에는 [PR #2](https://github.com/OpenStudyService/OpenStudy-Frontend/pull/2) 병합과 변수 등록이 필요하다.
 - Backend: Java 21·Spring Boot·Gradle 구성 확인. OCI·ECR·GitOps 배포, 실제 API 연결은 미구현이다.
-- 현재 상태: `terraform/frontend`와 `terraform/aws`의 관리 리소스는 모두 0개다.
+- 현재 상태: `terraform/frontend`와 `terraform/aws`의 관리 리소스는 모두 0개다. DuckDNS의 A·AAAA 기록과 AWS에 저장한 프로젝트 토큰도 삭제했다.
 
 ## 근거와 상세 문서
 

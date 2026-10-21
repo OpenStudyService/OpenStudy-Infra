@@ -4,6 +4,7 @@
 
 최초 설정은 [구축 절차의 1~7단계](setup.md)를 따른다.
 Terraform이 갱신 서비스를 설치하고, 서버가 DuckDNS API로 공인 IP를 반영한다.
+정적 웹페이지를 이 주소의 HTTPS로 제공하려면 [DuckDNS 정적 웹 배포](duckdns-frontend.md)를 따른다.
 
 ## 1. 갱신 상태 확인
 
@@ -40,6 +41,7 @@ sudo systemctl start openstudy-duckdns.service
 ## 3. 자동 갱신 중지
 
 로컬 `terraform/aws/terraform.tfvars`에 `enable_duckdns = false`를 설정한다.
+DuckDNS 정적 웹을 사용 중이면 `enable_frontend = false`도 함께 설정한다.
 저장소 루트에서 계획을 확인하고 적용한다.
 
 ```sh

@@ -10,8 +10,8 @@ DuckDNS는 EC2 공인 IP를 자동 반영한다. Cloudflare는 수동 설정한�
 
 | ID | 구성 | 상태 |
 | --- | --- | --- |
-| INF-NET-01 | `openstudy.duckdns.org`에 EC2 공인 IP 자동 반영 | 삭제 전 실환경 DNS와 EC2 공인 IP 일치 확인 |
-| INF-NET-02 | CloudFront 정적 HTTPS·EC2 API 원본 TLS | CloudFront 생성·전체 삭제 검증 완료, API 원본 TLS 후속 |
+| INF-NET-01 | `openstudy.duckdns.org`에 EC2 공인 IP 자동 반영 | 삭제 전 DNS와 EC2 공인 IP 일치 확인 |
+| INF-NET-02 | 정적 웹 HTTPS·Backend API 원본 TLS | DuckDNS·EC2 HTTPS 게시·접속 확인 완료, Backend API 연결 후속 |
 | INF-NET-03 | cloudflared 설치와 수동 Tunnel 연결 | 서버 코드 준비·연결 전 |
 | INF-NET-04 | Cloudflare WAF·요청 제한 | 연결 조건 확인 필요 |
 | INF-NET-05 | 기본 인바운드 차단·선택한 80·443 허용·Session Manager | 코드·모의 테스트 완료 |
@@ -27,6 +27,8 @@ INF-NET-04와 INF-SRV-03은 [원문 명세](https://docs.google.com/document/d/1
 [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 S3·CloudFront로 제공한다.
 [Backend](https://github.com/OpenStudyService/OpenStudy-Backend)는 GitHub Actions에서 ARM64 OCI 이미지를 빌드해 ECR에 저장하고 EC2에서 실행하도록 설계한다.
 Frontend의 S3·CloudFront·OIDC 역할과 Actions 워크플로 코드를 추가했다.
+`terraform/frontend apply`는 기본으로 로컬 Frontend 검사·live 빌드·S3 게시·CloudFront 확인까지 실행한다.
+Actions로만 게시할 때는 `deploy_frontend = false`를 설정한다.
 실제 생성·배포와 Backend 연결은 [Frontend 배포 순서](frontend-deployment.md)를 따른다.
 Backend ECR·OCI 배포 워크플로는 아직 구현하지 않았다.
 구현 순서는 [배포 설계](deployment.md)를 따른다.
@@ -36,7 +38,7 @@ Backend ECR·OCI 배포 워크플로는 아직 구현하지 않았다.
 Terraform 버전은 1.10.0으로 고정한다.
 2026-10-19에 AWS 모의 테스트 8개, 이전 Cloudflare 예제 테스트 5개와 Python 테스트 9개를 통과했다.
 Frontend Terraform 모의 테스트 5개와 SPA 경로 테스트 3개도 통과했다.
-Frontend 저장소의 검사·live 빌드와 배포 절차 테스트 3개를 통과했다. 실제 AWS 정적 웹 배포는 아직 실행하지 않았다.
+Frontend 저장소의 검사·live 빌드와 배포 절차 테스트 3개를 통과했다. 당시 실제 AWS 정적 웹 배포는 실행 전이었다.
 ARM·x86 초기 설정의 Bash·Python 구문과 user data 크기 검사도 통과했다.
 SSM 설정 전달과 설치 버전 변경 시 기존 EC2 보존도 검사했다.
 모의 테스트 통과는 실제 배포 성공을 뜻하지 않는다.
@@ -56,8 +58,50 @@ Terraform 1.10.0으로 실제 AWS를 다시 조회했고 `No changes`를 확인�
 CloudFront의 `Deployed` 상태와 S3 객체 0개를 확인했다.
 이후 사용자 요청으로 Frontend 리소스 12개를 모두 삭제했다.
 AWS API에서도 S3·CloudFront 구성·IAM 배포 역할·OIDC Provider 삭제를 확인했다.
-현재 `terraform/aws`와 `terraform/frontend` state의 관리 리소스는 모두 0개다.
-다음 Frontend 배포는 PR #2 병합, 인프라 재생성과 새 Actions 변수 등록이 필요하다.
+당시 `terraform/aws`와 `terraform/frontend` state의 관리 리소스는 모두 0개였다.
+로컬 Frontend 배포는 Node.js 24·npm·AWS CLI와 로컬 소스를 준비한 뒤 인프라를 적용한다.
+Actions 배포를 선택할 때만 PR #2 병합과 새 Actions 변수 등록이 필요하다.
+
+2026-10-20에 로컬 Frontend 게시를 Terraform 적용에 연결했다.
+Frontend Terraform 모의 테스트 8개와 로컬 게시 테스트 9개를 통과했다.
+Node.js 24에서 Frontend 타입 검사·린트·테스트 29개·live 빌드를 통과했다.
+기존 게시 스크립트의 모의 테스트 3개도 통과했다.
+
+같은 날 Terraform 1.10.0과 Node.js 24.19.0으로 실제 AWS 배포를 완료했다.
+AWS 리소스 12개와 로컬 게시 항목 1개를 생성했다. S3에는 정적 파일 11개를 게시했다.
+CloudFront 배포 `EHC94BW0NZ1HF`의 `Deployed` 상태와 캐시 갱신 완료를 확인했다.
+`/`, `/login`, `/invitations/accept`의 HTML과 진입 JavaScript·CSS가 로컬 빌드와 일치한다.
+배포 당시 `d14goo9a4tr1w0.cloudfront.net`에서 로그인 화면도 확인했다.
+적용 후 Terraform 재검사 결과는 `No changes`다. `terraform/aws`의 관리 리소스는 계속 0개다.
+Backend는 연결하지 않았다. 당시 `/api/me`는 JSON 503을 반환했다.
+
+이후 같은 날 사용자 요청으로 Terraform 삭제 계획을 적용했다.
+AWS 리소스 12개와 로컬 게시 항목 1개를 모두 삭제했다. S3 정적 파일 11개도 함께 삭제했다.
+AWS API에서 버킷·CloudFront 배포·OAC·SPA 함수·캐시 정책·IAM 역할·OIDC Provider 삭제를 확인했다.
+삭제 직후 `terraform/frontend`와 `terraform/aws`의 관리 리소스는 모두 0개였다.
+두 경로의 삭제 계획은 모두 `No changes`를 반환했다. 서비스 주소는 종료했다.
+코드와 로컬 state·변수 파일은 보관한다.
+
+2026-10-21에 DuckDNS 접속 주소로 정적 웹을 다시 배포했다.
+`terraform/aws`에서 EC2·Caddy HTTPS·비공개 S3 배포 파일과 게시 단계를 포함한 21개 항목을 관리했다.
+`terraform/frontend`의 S3·CloudFront 경로는 계속 삭제 상태다.
+당시 DuckDNS A 레코드와 EC2 공인 IP `43.203.123.190`이 일치하는 것을 확인했다.
+`/`, `/login`, `/invitations/accept`와 진입 JavaScript·CSS가 실제 빌드와 일치하는 것을 확인했다.
+HTTP의 HTTPS 이동, 없는 정적 파일의 404와 미연결 API의 JSON 503도 확인했다.
+최초 SSM 실행 완료 전에 게시가 시작되는 문제는 해당 EC2의 실제 설정 실행 성공을 기다리도록 수정했다.
+토큰은 Parameter Store SecureString에 저장했다. Terraform state에는 토큰 값을 넣지 않는다.
+
+이후 같은 날 사용자 요청으로 Terraform 관리 항목 21개를 모두 삭제했다.
+AWS API에서 EC2 종료와 루트 EBS·S3 버킷·네트워크·IAM·SSM 구성 삭제를 확인했다.
+해당 루트 EBS의 스냅샷도 남아 있지 않다.
+DuckDNS A·AAAA 기록을 비웠고 AWS에 저장한 프로젝트 토큰도 삭제했다.
+`terraform/aws`와 `terraform/frontend`의 관리 리소스는 모두 0개다.
+두 경로의 삭제 계획은 모두 `No changes`를 반환했다. 현재 웹 서비스는 중지 상태다.
+
+2026-10-21에 배포 변경을 정리하면서 로컬 검증을 다시 실행했다.
+Terraform 모의 테스트 25개, Node.js 테스트 12개와 Python 테스트 20개를 통과했다.
+ARM·x86 서버 설정은 정적 웹 활성화·비활성화 조합 4개에서 구문과 크기 검사를 통과했다.
+이 검증에서는 실제 AWS 리소스를 생성하거나 변경하지 않았다.
 
 ```sh
 ./scripts/validate.sh
@@ -65,7 +109,7 @@ AWS API에서도 S3·CloudFront 구성·IAM 배포 역할·OIDC Provider 삭제�
 
 ## 다음 순서
 
-1. [Frontend 배포 순서](frontend-deployment.md)에 따라 PR 병합, 인프라 재생성, 새 Actions 변수 등록 후 정적 파일을 게시한다.
+1. Frontend를 수정할 때 [DuckDNS 배포 순서](duckdns-frontend.md)에 따라 `terraform/aws`의 새 계획을 만들고 다시 게시한다.
 2. Backend를 배포할 때 [구축 절차](setup.md)로 EC2·DuckDNS를 재생성한다. OCI·ECR 배포는 후속 구현한다.
 3. `/api/*` 원본 HTTPS·세션·CSRF·SSE와 외부 포트 차단을 확인한다.
 4. [Cloudflare 연결 조건](cloudflare-manual.md)을 확인하고 수동 설정한다.
