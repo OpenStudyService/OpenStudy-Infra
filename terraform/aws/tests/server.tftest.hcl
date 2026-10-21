@@ -23,7 +23,6 @@ variables {
   aws_region          = "ap-northeast-2"
   name_prefix         = "openstudy-prod"
   instance_type       = "t4g.small"
-  cloudflared_version = "2026.10.1"
   free_tier_confirmed = true
   enable_duckdns      = true
   duckdns_subdomain   = "openstudy"
@@ -131,6 +130,11 @@ run "reject_full_hostname_as_subdomain" {
 
 run "configuration_seed" {
   command = apply
+
+  # Seed the previous release so the next run exercises a real upgrade.
+  variables {
+    cloudflared_version = "2026.10.1"
+  }
 
   assert {
     condition     = !aws_instance.server.user_data_replace_on_change && aws_ssm_association.server.targets[0].values == tolist([aws_instance.server.id]) && aws_ssm_association.server.document_version == aws_ssm_document.server.latest_version && aws_ssm_association.server.wait_for_success_timeout_seconds == 1800

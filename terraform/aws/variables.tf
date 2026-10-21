@@ -72,11 +72,11 @@ variable "root_volume_size_gib" {
 variable "cloudflared_version" {
   description = "Pinned official cloudflared RPM release."
   type        = string
-  default     = "2026.10.1"
+  default     = "2026.10.2"
 
   validation {
     condition     = can(regex("^[0-9]{4}\\.[0-9]{1,2}\\.[0-9]+$", var.cloudflared_version))
-    error_message = "Use a cloudflared release such as 2026.10.1."
+    error_message = "Use a cloudflared release such as 2026.10.2."
   }
 }
 
