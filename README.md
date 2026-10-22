@@ -6,13 +6,17 @@ OpenStudy의 AWS 네트워크·EC2와 Frontend S3·CloudFront 호스팅을 Terra
 
 ## 통합 아키텍처와 배포 흐름
 
-![Terraform IaC 통합 배포 아키텍처](docs/images/openstudy-terraform-deployment-numbered.png)
+![OpenStudy AWS 아키텍처](docs/images/openstudy-duckdns-deployment-numbered.png)
 
-[draw.io 편집 파일](docs/images/openstudy-terraform-deployment-numbered.drawio)을 내려받아 draw.io에서 연다.
+최신 서비스 배치와 운영 상태는 **[AWS 아키텍처 문서](docs/architecture.md)**를 따른다.
+[draw.io 편집 파일](docs/images/openstudy-duckdns-deployment-numbered.drawio) · [SVG](docs/images/openstudy-duckdns-deployment-numbered.svg) · [HTML](docs/images/openstudy-duckdns-deployment-numbered.html)
 
-번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
-실선은 코드가 있는 경로, 긴 점선은 후속 연결, 짧은 점선은 Terraform 제어다.
-현재 AWS 리소스는 모두 삭제한 상태다. Backend OCI·ECR 경로는 후속 구현이다.
+Nginx와 향후 Gateway·Service 컨테이너 두 개를 EC2 한 대에 배치한다.
+DB는 Single-AZ RDS Primary 한 대다. 자동 백업과 삭제 시 최종 스냅샷은 만들지 않는다.
+평일 서울 시간 11:00~18:00 운영을 자동화한다. 실제 앱 이미지가 없어 ECS 앱 태스크는 미배포 상태다.
+2026-10-22 사용 종료 후 EC2와 RDS를 모두 중지했다. 다음 자동 시작 예정은 10월 23일 11:00이다.
+그림에는 작은 원형 번호와 짧은 영문 서비스 이름만 표시한다. 상세 설명은 그림 밖에 둔다.
+이 갱신은 아키텍처 문서와 그림만 포함한다. Terraform·배포 스크립트 변경은 별도다.
 
 ## 실행 환경
 

@@ -1,5 +1,8 @@
 # Terraform IaC 통합 배포 아키텍처
 
+> 최신 AWS 배치와 운영 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
+> 아래 내용은 이전 S3·CloudFront 배포 경로의 기록이다. 현재 운영 구성은 최신 아키텍처 문서를 기준으로 한다.
+
 [README로 돌아가기](../README.md)
 
 Terraform의 생성·설정·삭제와 애플리케이션의 빌드·게시·접속을 한 흐름으로 정리한다.
