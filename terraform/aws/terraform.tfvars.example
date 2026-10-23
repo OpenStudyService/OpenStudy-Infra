@@ -14,3 +14,21 @@ web_ingress_cidrs     = []
 # enable_frontend = true
 # web_ingress_cidrs = ["0.0.0.0/0"]
 # frontend_source_dir = "/absolute/path/to/OpenStudy-Frontend"
+# Only add trusted browser origins. The production DuckDNS HTTPS origin is automatic.
+# frontend_cors_allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+# To create one private Single-AZ RDS MySQL primary and apply migrations:
+# enable_database = true
+# database_name = "openstudy"
+# database_engine_version = "8.4.11"
+# database_instance_class = "db.t4g.micro"
+# database_storage_gib = 20
+# database_backup_retention_days = 0 # Automated backups disabled by default.
+# database_skip_final_snapshot = true # Budget profile: no backup at deletion.
+# database_apply_immediately = true # Budget profile: apply approved RDS changes now.
+# apply_database_migrations = true
+# database_deletion_protection = true
+
+# ECS on one EC2, one RDS primary, weekdays 11:00-18:00 KST, KRW 50,000 budget:
+# Add -var-file=profiles/budget.tfvars.example after your local terraform.tfvars.
+# See docs/ecs-budget.md before supplying real image digests matching container_platform.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the live Frontend and atomically publish it to EC2 through S3 and SSM."""
+"""Build the selected Frontend mode and publish it to EC2 through S3 and SSM."""
 
 import hashlib
 import json
@@ -21,14 +21,16 @@ def aws_json(region, *arguments):
     return json.loads(result.stdout)
 
 
-def package_release(dist, archive):
+def package_release(dist, archive, api_mode="live"):
     if not (dist / "index.html").is_file() or not (dist / "assets").is_dir():
-        raise RuntimeError("The live build must contain index.html and assets/.")
+        raise RuntimeError("The Frontend build must contain index.html and assets/.")
+    if api_mode == "mock" and not (dist / "mockServiceWorker.js").is_file():
+        raise RuntimeError("The demo build must contain mockServiceWorker.js.")
     with tarfile.open(archive, "w:gz") as bundle:
         for source in sorted(dist.rglob("*")):
             if source.is_symlink():
                 raise RuntimeError("Do not publish symlinks from the build output.")
-            if source.is_file() and source.suffix != ".map" and source.name != "mockServiceWorker.js":
+            if source.is_file() and source.suffix != ".map" and (api_mode == "mock" or source.name != "mockServiceWorker.js"):
                 bundle.add(source, arcname=source.relative_to(dist), recursive=False)
     return hashlib.sha256(archive.read_bytes()).hexdigest()
 
@@ -125,18 +127,22 @@ def deploy():
     hostname = os.environ["FRONTEND_HOSTNAME"]
     instance_id = os.environ["FRONTEND_INSTANCE_ID"]
     bucket = os.environ["FRONTEND_ARTIFACT_BUCKET"]
+    api_mode = os.environ.get("FRONTEND_API_MODE", "live")
+    if api_mode not in {"live", "mock"}:
+        raise RuntimeError("FRONTEND_API_MODE must be live or mock.")
     node_version = subprocess.run(["node", "--version"], capture_output=True, text=True, check=True).stdout.strip()
     if not node_version.startswith("v24."):
         raise RuntimeError("Frontend deployment requires Node.js 24.")
     if aws_json(region, "sts", "get-caller-identity")["Account"] != os.environ["AWS_ACCOUNT_ID"]:
         raise RuntimeError("AWS CLI account does not match the Terraform target account.")
     wait_configuration(region, os.environ["FRONTEND_ASSOCIATION_ID"], instance_id)
-    env = {**os.environ, "VITE_API_MODE": "live", "VITE_API_BASE_URL": "/api"}
-    for command in [["npm", "ci", "--include=dev"], ["npm", "run", "check"], ["npm", "run", "build"]]:
+    env = {**os.environ, "VITE_API_MODE": api_mode, "VITE_API_BASE_URL": "/api"}
+    build = ["npm", "run", "build:demo" if api_mode == "mock" else "build"]
+    for command in [["npm", "ci", "--include=dev"], ["npm", "run", "check"], build]:
         subprocess.run(command, cwd=source, env=env, check=True)
     with tempfile.TemporaryDirectory(prefix="openstudy-release-") as temporary:
         archive = Path(temporary) / "release.tar.gz"
-        digest = package_release(source / "dist", archive)
+        digest = package_release(source / "dist", archive, api_mode)
         subprocess.run(["aws", "s3", "cp", str(archive), f"s3://{bucket}/releases/{digest}.tar.gz", "--region", region, "--sse", "AES256", "--only-show-errors"], check=True)
         command = aws_json(
             region, "ssm", "send-command", "--instance-ids", instance_id,

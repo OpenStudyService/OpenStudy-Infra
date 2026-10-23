@@ -82,5 +82,5 @@ resource "aws_ssm_association" "server" {
     replace_triggered_by = [aws_ssm_document.server.content]
   }
 
-  depends_on = [aws_iam_role_policy.server_configuration]
+  depends_on = [aws_iam_role_policy.server_configuration, aws_iam_role_policy.frontend_test_login]
 }

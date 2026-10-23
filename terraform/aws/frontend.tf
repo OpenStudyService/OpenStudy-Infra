@@ -1,10 +1,19 @@
 locals {
   frontend_hostname   = "${var.duckdns_subdomain}.duckdns.org"
-  frontend_caddyfile  = templatefile("${path.module}/templates/Caddyfile.tftpl", { hostname = local.frontend_hostname })
+  frontend_test_login = var.enable_frontend && var.frontend_api_mode == "mock"
+  frontend_cors_allowed_origins = sort(tolist(setunion(
+    toset(["https://${local.frontend_hostname}"]), var.frontend_cors_allowed_origins,
+  )))
+  frontend_nginx_config = templatefile("${path.module}/templates/nginx.conf.tftpl", {
+    hostname             = local.frontend_hostname
+    test_login_enabled   = local.frontend_test_login
+    backend_enabled      = local.apps_enabled
+    cors_allowed_origins = local.frontend_cors_allowed_origins
+  })
   frontend_source_dir = abspath(var.frontend_source_dir != null ? var.frontend_source_dir : "${path.module}/../../../OpenStudy-Frontend")
   frontend_sources = var.enable_frontend ? setunion(
     fileset(local.frontend_source_dir, "{src,public}/**"),
-    fileset(local.frontend_source_dir, "{package.json,package-lock.json,index.html,tsconfig*.json,vite.config.*,eslint.config.*,.npmrc,.env,.env.local,.env.live,.env.live.local}"),
+    fileset(local.frontend_source_dir, "{package.json,package-lock.json,index.html,tsconfig*.json,vite.config.*,eslint.config.*,.npmrc,.env,.env.local,.env.live,.env.live.local,.env.mock,.env.mock.local}"),
   ) : toset([])
   frontend_source_hash = sha256(jsonencode({
     for source in local.frontend_sources : source => filesha256("${local.frontend_source_dir}/${source}")
@@ -72,6 +81,20 @@ resource "aws_iam_role_policy" "frontend_artifacts" {
   })
 }
 
+resource "aws_iam_role_policy" "frontend_test_login" {
+  count = local.frontend_test_login ? 1 : 0
+  name  = "read-frontend-test-login"
+  role  = aws_iam_role.server.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameter"]
+      Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.name_prefix}/frontend/test-login"
+    }]
+  })
+}
+
 resource "terraform_data" "frontend_deployment" {
   count = var.enable_frontend ? 1 : 0
   triggers_replace = {
@@ -80,7 +103,8 @@ resource "terraform_data" "frontend_deployment" {
     artifact_bucket    = aws_s3_bucket.frontend_artifacts[0].id
     source_hash        = local.frontend_source_hash
     script_hash        = filesha256("${path.module}/../../scripts/deploy-frontend-ec2.py")
-    configuration_hash = sha256(local.frontend_caddyfile)
+    configuration_hash = sha256(local.frontend_nginx_config)
+    api_mode           = var.frontend_api_mode
   }
 
   lifecycle {
@@ -102,6 +126,7 @@ resource "terraform_data" "frontend_deployment" {
       FRONTEND_INSTANCE_ID     = aws_instance.server.id
       FRONTEND_ASSOCIATION_ID  = aws_ssm_association.server.association_id
       FRONTEND_ARTIFACT_BUCKET = aws_s3_bucket.frontend_artifacts[0].id
+      FRONTEND_API_MODE        = var.frontend_api_mode
       AWS_ACCOUNT_ID           = var.aws_account_id
       AWS_REGION               = var.aws_region
     }

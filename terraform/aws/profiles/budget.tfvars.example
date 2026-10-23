@@ -1,0 +1,22 @@
+# Apply after local terraform.tfvars; contains no account IDs or credentials.
+# Estimate: docs/ecs-budget.md; KRW 50,000/month, Seoul, no credits assumed.
+instance_type                  = "c7i-flex.large"
+server_availability_zone       = "ap-northeast-2b"
+root_volume_size_gib           = 30
+swap_size_mib                  = 1024
+enable_frontend                = true
+frontend_api_mode              = "live"
+enable_duckdns                 = true
+web_ingress_cidrs              = ["0.0.0.0/0"]
+enable_ecs                     = true
+enable_database                = true
+database_instance_class        = "db.t4g.micro"
+database_storage_gib           = 20
+database_backup_retention_days = 0
+database_skip_final_snapshot   = true
+database_apply_immediately     = true
+enable_operating_schedule      = true
+
+# Both remain null until actual AMD64 application images exist.
+gateway_image                  = null
+service_image                  = null

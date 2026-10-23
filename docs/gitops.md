@@ -3,7 +3,7 @@
 [README로 돌아가기](../README.md)
 
 Backend는 Git의 배포 설정과 Amazon ECR 이미지를 서버가 가져오는 방식을 사용한다.
-Frontend의 기본 경로는 DuckDNS → EC2 Caddy → 정적 파일이다.
+Frontend의 기본 경로는 DuckDNS → EC2 Nginx → 정적 파일이다.
 `terraform/aws apply`가 검사·live 빌드·비공개 S3 압축 파일 전달·SSM 게시를 실행한다.
 실행 절차는 [DuckDNS 정적 웹 배포](duckdns-frontend.md)를 따른다.
 S3·CloudFront는 별도 선택 경로다. [자동 배포 순서](frontend-deployment.md)에 따라 로컬 Terraform 게시 또는 Actions를 사용한다.
@@ -43,7 +43,7 @@ S3·CloudFront 경로는 정적 파일 게시 후 캐시를 갱신한다.
 ## 4. 접속과 비밀값
 
 서버 관리는 Session Manager를 사용한다. Backend와 DB의 내부 포트는 외부에 공개하지 않는다.
-DuckDNS 경로의 `/api`와 `/api/*`는 현재 JSON 503을 반환한다. Backend 연결 시 Caddy의 API 프록시와 세션·CSRF·SSE를 검증한다.
+DuckDNS 경로의 `/api`와 `/api/*`는 현재 JSON 503을 반환한다. Backend 연결 시 Nginx의 API 프록시와 세션·CSRF·SSE를 검증한다.
 S3·CloudFront 경로를 선택하면 `/api/*`를 Backend HTTPS 원본에 연결한다. 원본 인증서와 접근 허용 규칙을 별도로 구성한다.
 Cloudflare 추가 연결은 [수동 설정](cloudflare-manual.md)의 연결 조건을 먼저 확인한다.
 

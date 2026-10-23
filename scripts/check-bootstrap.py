@@ -9,12 +9,18 @@ import subprocess
 
 
 root = Path(__file__).resolve().parents[1]
-for instance_type, enable_frontend in (("t4g.small", False), ("t3.micro", False), ("t4g.small", True), ("t3.micro", True)):
+for instance_type, enable_frontend, enable_ecs in (
+    ("t4g.small", False, False), ("t3.micro", False, False),
+    ("t4g.small", True, False), ("t3.micro", True, False), ("t4g.medium", True, True),
+    ("c7i-flex.large", True, True),
+):
     result = subprocess.run(
         [
             "terraform", f"-chdir={root / 'terraform/aws'}", "console", "-no-color",
             "-var=aws_account_id=123456789012", f"-var=instance_type={instance_type}",
             f"-var=enable_frontend={str(enable_frontend).lower()}",
+            f"-var=enable_ecs={str(enable_ecs).lower()}",
+            "-var=root_volume_size_gib=30",
         ],
         input="base64encode(local.user_data)\n",
         capture_output=True,
@@ -28,8 +34,11 @@ for instance_type, enable_frontend in (("t4g.small", False), ("t3.micro", False)
     if "<<'DUCKDNS_PY'\n" in script:
         updater = script.split("<<'DUCKDNS_PY'\n", 1)[1].split("\nDUCKDNS_PY", 1)[0]
         ast.parse(updater)
+    if "<<'LOGIN_PY'\n" in script:
+        settings_script = script.split("<<'LOGIN_PY'\n", 1)[1].split("\nLOGIN_PY", 1)[0]
+        ast.parse(settings_script)
     if len(script.encode()) > 16384:
         raise SystemExit("EC2 user data exceeds the 16 KiB limit.")
     if "${" in script:
         raise SystemExit("Bootstrap contains an unresolved template expression.")
-    print(f"Bootstrap syntax and size passed: {instance_type}, frontend={enable_frontend}")
+    print(f"Bootstrap syntax and size passed: {instance_type}, frontend={enable_frontend}, ecs={enable_ecs}")

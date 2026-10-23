@@ -9,6 +9,8 @@
 
 현재 코드로 새로 만든 환경은 2단계로 이동한다.
 이전 코드로 만든 EC2는 종료 방지와 디스크 보관 설정을 먼저 변경한다.
+RDS를 생성했다면 [DB 삭제 순서](database.md#삭제)에 따라 삭제 보호를 먼저 해제한다.
+전체 데이터를 삭제할 때는 최종 스냅샷 생략도 일반 적용으로 먼저 반영한다.
 
 ```sh
 terraform -chdir=terraform/aws plan -out=teardown-prepare.tfplan
@@ -44,7 +46,10 @@ state 목록에 관리 리소스가 남아 있지 않은지 확인한다.
 
 DuckDNS 경로의 배포용 S3는 `terraform/aws`로 생성·삭제한다.
 S3·CloudFront·OIDC 배포 역할의 선택 경로는 `terraform/frontend`로 생성·삭제한다.
-현재 이 저장소에는 ECR과 DB 생성 코드가 없다.
+선택형 RDS MySQL·비공개 서브넷·마이그레이션 버킷은 `terraform/aws`에서 생성·삭제한다.
+현재 기본값과 예산 프로필은 사용자 요청으로 자동 백업과 최종 스냅샷을 끈 상태다. 삭제 보호는 유지한다.
+최종 스냅샷을 별도로 켠 구성에서는 해당 스냅샷이 Terraform 삭제 후에도 남는다.
+현재 이 저장소에는 ECR 생성 코드가 없다.
 별도로 생성했다면 Terraform으로 가져와 같은 삭제 범위에 포함한다.
 
 | 대상 | 전체 삭제 기준 |
@@ -65,12 +70,12 @@ Terraform이 관리하지 않는 리소스는 `destroy`로 삭제되지 않는�
 ## 4. 별도 등록한 토큰 삭제
 
 AWS Parameter Store에서 `/openstudy-prod/` 아래 파라미터를 확인한다.
-프로젝트에서 등록한 DuckDNS·Cloudflare 토큰도 삭제한다.
+프로젝트에서 등록한 DuckDNS·Cloudflare 토큰과 테스트 로그인 설정도 삭제한다.
 기본 경로와 리전을 사용했다면 다음 명령으로 정리한다.
 
 ```sh
 aws ssm delete-parameters --region ap-northeast-2 \
-  --names /openstudy-prod/duckdns/token /openstudy-prod/cloudflared/token
+  --names /openstudy-prod/duckdns/token /openstudy-prod/cloudflared/token /openstudy-prod/frontend/test-login
 ```
 
 등록하지 않은 이름은 응답의 `InvalidParameters`에 표시할 수 있다.
@@ -81,3 +86,13 @@ aws ssm delete-parameters --region ap-northeast-2 \
 Git의 코드, 로컬 `terraform.tfstate`와 변수 파일은 보관한다.
 [Terraform 실행](../README.md#terraform-실행) 후 [DuckDNS 토큰 등록](setup.md#5-duckdns-토큰-저장)을 다시 진행한다.
 새 EC2의 공인 IP와 DNS 응답이 일치하는지 확인한다.
+
+
+## ECS 예산 구성 추가 정리
+
+`enable_ecs=true`이면 ECS 서비스·태스크·ECR·CloudWatch 로그도 삭제 대상이다.
+운영 스케줄을 사용하면 Scheduler와 Lambda도 같은 AWS 스택에서 삭제한다.
+ECR은 이미지가 남아 있으면 삭제를 거부한다. 필요한 이미지를 보관한 후 저장소를 비운다.
+태그가 있는 릴리스는 자동 정리하지 않는다. 보관 용량을 별도로 확인한다.
+SSM에 별도로 등록한 `/openstudy-prod/apps/`의 앱 비밀번호는 Terraform 관리 대상이 아니다.
+DB 스냅샷과 앱 파라미터도 프로젝트 전체 정리 범위에 맞춰 확인한다.

@@ -1,21 +1,22 @@
 # OpenStudy-Infra
 
-OpenStudy의 AWS 네트워크·EC2와 Frontend 정적 웹 배포를 Terraform으로 관리한다.
+OpenStudy의 AWS 네트워크·EC2·선택형 Single-AZ RDS MySQL과 Frontend 정적 웹 배포를 Terraform으로 관리한다.
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결하고 HTTPS 정적 웹을 제공한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.
 
 ## 통합 아키텍처와 배포 흐름
 
-![DuckDNS·EC2 기본 배포 아키텍처](docs/images/openstudy-duckdns-deployment-numbered.png)
+![OpenStudy AWS 아키텍처](docs/images/openstudy-duckdns-deployment-numbered.png)
 
-[draw.io 편집 파일](docs/images/openstudy-duckdns-deployment-numbered.drawio)을 내려받아 draw.io에서 연다.
-S3·CloudFront 선택 경로는 [별도 그림](docs/images/openstudy-terraform-deployment-numbered.html)을 따른다.
+최신 서비스 배치와 운영 상태는 **[AWS 아키텍처 문서](docs/architecture.md)**를 따른다.
+[draw.io 편집 파일](docs/images/openstudy-duckdns-deployment-numbered.drawio) · [SVG](docs/images/openstudy-duckdns-deployment-numbered.svg) · [HTML](docs/images/openstudy-duckdns-deployment-numbered.html)
 
-번호별 AWS 서비스 설명, 네트워크 표와 생성·배포·삭제 순서는 **[통합 배포 문서](docs/deployment.md)**를 따른다.
-실선은 정적 파일과 접속 경로, 짧은 점선은 Terraform·SSM 제어다.
-2026-10-21에 DuckDNS 정적 웹 배포를 확인한 뒤 사용자 요청으로 전체 삭제했다. 현재 웹 서비스는 중지 상태다.
-DuckDNS 직접 연결은 [EC2 기반 정적 웹 배포](docs/duckdns-frontend.md)를 따른다.
-Backend OCI·ECR 경로는 후속 구현이다.
+Nginx와 향후 Gateway·Service 컨테이너 두 개를 EC2 한 대에 배치한다.
+DB는 Single-AZ RDS Primary 한 대다. 자동 백업과 삭제 시 최종 스냅샷은 만들지 않는다.
+평일 서울 시간 11:00~18:00 운영을 자동화한다. 실제 앱 이미지가 없어 ECS 앱 태스크는 미배포 상태다.
+2026-10-22 사용 종료 후 EC2와 RDS를 모두 중지했다. 다음 자동 시작 예정은 10월 23일 11:00이다.
+그림에는 작은 원형 번호와 짧은 영문 서비스 이름만 표시한다. 상세 설명은 그림 밖에 둔다.
+이 갱신은 아키텍처 문서와 그림만 포함한다. Terraform·배포 스크립트 변경은 별도다.
 
 ## 실행 환경
 
@@ -32,7 +33,7 @@ tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 �
 | AWS 공급자 | 6.69.1 | [릴리스](https://github.com/hashicorp/terraform-provider-aws/releases/tag/v6.69.1) |
 | Cloudflare 공급자 | 5.28.1 | [릴리스](https://github.com/cloudflare/terraform-provider-cloudflare/releases/tag/v5.28.1) |
 | cloudflared | 2026.10.2 | [릴리스](https://github.com/cloudflare/cloudflared/releases/tag/2026.10.2) |
-| Caddy | 2.11.7-alpine | [릴리스](https://github.com/caddyserver/caddy/releases/tag/v2.11.7) |
+| Nginx | 1.30.6 (Debian) | [릴리스](https://nginx.org/en/download.html) |
 
 공급자는 각 스택의 `.terraform.lock.hcl`을 따른다.
 기존 로컬 변수 파일에 `cloudflared_version`이 있으면 `2026.10.2`로 갱신한다.
@@ -41,6 +42,7 @@ tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 �
 ## 기본 구성
 
 - 서울 리전에 `t4g.small` 1대, gp3 8GiB, 스왑 1GiB를 구성한다.
+- 현재 예산 프로필은 계정 제한에 맞춰 `c7i-flex.large`·AMD64·4GiB와 gp3 30GiB를 사용한다.
 - Docker와 DuckDNS 자동 갱신 서비스를 설치한다.
 - Terraform이 SSM으로 서버 설정을 적용한다. 설정 변경 시 기존 EC2를 유지한다.
 - 서버 관리는 AWS Session Manager를 사용한다.
@@ -49,7 +51,7 @@ tfenv를 사용하면 저장소 안에서 `tfenv install`로 해당 버전을 �
 ## Frontend 정적 웹 자동 배포
 
 DuckDNS 주소는 `terraform/aws`에서 `enable_frontend = true`로 배포한다.
-EC2의 Caddy가 HTTPS와 정적 파일을 제공한다. 비공개 S3는 배포 압축 파일 전달에 사용한다.
+EC2의 Nginx가 HTTPS와 정적 파일을 제공한다. 비공개 S3는 배포 압축 파일 전달에 사용한다.
 실제 실행과 전체 삭제는 [DuckDNS 정적 웹 배포](docs/duckdns-frontend.md)를 따른다.
 
 `terraform/frontend`는 EC2와 별도 state로 S3·CloudFront·OAC와 GitHub OIDC 배포 역할을 관리한다.
@@ -62,10 +64,14 @@ GitHub Actions로 게시할 때는 `deploy_frontend = false`를 설정한다.
 
 ## Backend 배포 설계
 
-Backend OCI·ECR 자동 배포는 구현 예정이다.
+RDS MySQL 8.4와 테이블 배포는 [DB 배포 문서](docs/database.md)를 따른다.
+`enable_database = true`로 비공개 RDS 생성과 Flyway 스키마 적용을 연결한다.
+기본값은 비활성화다. Backend 연결은 별도 작업이다.
 
-- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 DuckDNS·EC2 Caddy로 제공한다. S3·CloudFront는 별도 선택 경로다.
-- [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): GitHub Actions에서 ARM64 OCI 이미지를 빌드해 Amazon ECR에 저장한다. EC2가 이미지를 가져와 실행한다.
+ECS·ECR 기반은 구현했다. 앱 이미지 빌드와 GitHub Actions 연결은 후속 작업이다.
+
+- [Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend): React·Vite의 `dist/`를 DuckDNS·EC2 Nginx로 제공한다. S3·CloudFront는 별도 선택 경로다.
+- [Backend](https://github.com/OpenStudyService/OpenStudy-Backend): 향후 GitHub Actions에서 서버에 맞는 OCI 이미지를 빌드해 Amazon ECR에 저장한다. 현재 예산 프로필의 플랫폼은 `linux/amd64`다.
 - GitHub OIDC로 AWS 배포 역할을 사용한다. 사용 후 S3·CloudFront·ECR도 전체 삭제한다.
 
 Terraform과 애플리케이션의 역할 및 전체 순서는 [통합 배포 문서](docs/deployment.md)를 따른다.
@@ -84,6 +90,13 @@ Terraform과 애플리케이션의 역할 및 전체 순서는 [통합 배포 �
 이후 부팅 시와 약 15분 간격으로 IP를 확인하고 변경 시 DNS를 갱신한다.
 
 ## Terraform 실행
+
+현재 배포에는 예산 프로필을 계속 지정한다. 프로필을 빼면 기본값으로 되돌리는 변경이 생길 수 있다.
+
+```sh
+terraform -chdir=terraform/aws plan -var-file=profiles/budget.tfvars.example -out=budget.tfplan
+terraform -chdir=terraform/aws apply budget.tfplan
+```
 
 변수 설정을 마친 뒤 저장소 루트에서 검증과 계획을 실행한다.
 
@@ -119,7 +132,8 @@ terraform -chdir=terraform/aws apply destroy.tfplan
 EC2와 루트 디스크, 네트워크·IAM·SSM 구성을 삭제한다.
 S3·DB·백업과 별도 등록한 토큰까지 확인하는 방법은 **[AWS 전체 정리](docs/teardown.md)**를 따른다.
 Frontend를 생성했다면 `terraform/frontend`도 별도로 전체 삭제한다. [Frontend 정리](docs/frontend-deployment.md#6-사용-후-전체-삭제)를 따른다.
-DB 생성 코드는 아직 없다. 별도로 만든 리소스는 state에 포함해야 Terraform이 삭제한다.
+RDS를 생성했다면 먼저 [DB 삭제 순서](docs/database.md#삭제)에 따라 삭제 보호를 해제한다.
+최종 스냅샷과 수동 백업은 별도로 확인한다.
 
 코드와 로컬 state·변수 파일은 보관한다.
 다음 사용 시 Terraform을 다시 적용하고 DuckDNS 토큰을 재등록한다.
@@ -136,6 +150,8 @@ DB 생성 코드는 아직 없다. 별도로 만든 리소스는 state에 포함
 - [Frontend 자동 배포·생성·정리](docs/frontend-deployment.md)
 - [DuckDNS 정적 웹·HTTPS 배포](docs/duckdns-frontend.md)
 - [요구조건과 검증 상태](docs/requirements.md)
+- [RDS MySQL·테이블 배포](docs/database.md)
+- [월 5만 원 ECS 구성과 비용](docs/ecs-budget.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.
 서버 설정 결과는 SSM 실행 상태와 DNS 응답으로 확인한다.

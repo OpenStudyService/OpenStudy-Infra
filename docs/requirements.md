@@ -24,8 +24,8 @@ INF-NET-04와 INF-SRV-03은 [원문 명세](https://docs.google.com/document/d/1
 
 ## 추가 배포 범위
 
-[Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 기본으로 DuckDNS·EC2 Caddy로 제공한다. S3·CloudFront는 별도 선택 경로다.
-[Backend](https://github.com/OpenStudyService/OpenStudy-Backend)는 GitHub Actions에서 ARM64 OCI 이미지를 빌드해 ECR에 저장하고 EC2에서 실행하도록 설계한다.
+[Frontend](https://github.com/OpenStudyService/OpenStudy-Frontend)의 React·Vite 정적 빌드는 기본으로 DuckDNS·EC2 Nginx로 제공한다. S3·CloudFront는 별도 선택 경로다.
+[Backend](https://github.com/OpenStudyService/OpenStudy-Backend)는 GitHub Actions에서 서버 CPU에 맞는 OCI 이미지를 빌드해 ECR에 저장하고 EC2에서 실행하도록 설계한다. 현재 예산 프로필은 `linux/amd64`를 사용한다.
 Frontend의 S3·CloudFront·OIDC 역할과 Actions 워크플로 코드를 추가했다.
 `terraform/frontend apply`는 기본으로 로컬 Frontend 검사·live 빌드·S3 게시·CloudFront 확인까지 실행한다.
 Actions로만 게시할 때는 `deploy_frontend = false`를 설정한다.
@@ -83,7 +83,7 @@ AWS API에서 버킷·CloudFront 배포·OAC·SPA 함수·캐시 정책·IAM 역
 코드와 로컬 state·변수 파일은 보관한다.
 
 2026-10-21에 DuckDNS 접속 주소로 정적 웹을 다시 배포했다.
-`terraform/aws`에서 EC2·Caddy HTTPS·비공개 S3 배포 파일과 게시 단계를 포함한 21개 항목을 관리했다.
+`terraform/aws`에서 EC2·Caddy HTTPS·비공개 S3 배포 파일과 게시 단계를 포함한 21개 항목을 관리했다. 이는 전환 전 기록이다.
 `terraform/frontend`의 S3·CloudFront 경로는 계속 삭제 상태다.
 당시 DuckDNS A 레코드와 EC2 공인 IP `43.203.123.190`이 일치하는 것을 확인했다.
 `/`, `/login`, `/invitations/accept`와 진입 JavaScript·CSS가 실제 빌드와 일치하는 것을 확인했다.
@@ -105,7 +105,7 @@ ARM·x86 서버 설정은 정적 웹 활성화·비활성화 조합 4개에서 �
 
 같은 날 실행 버전과 현재 문서를 최신화했다.
 Terraform CLI를 1.16.6, Cloudflare 공급자를 5.28.1, cloudflared를 2026.10.2로 갱신했다.
-AWS 공급자 6.69.1과 Caddy 2.11.7-alpine은 유지했다.
+당시 AWS 공급자 6.69.1과 Caddy 2.11.7-alpine을 사용했다. 2026-10-22에 웹서버를 Nginx 1.30.6으로 교체했다.
 cloudflared 2026.10.1에서 2026.10.2로 설정을 바꿀 때 기존 EC2를 유지하는 모의 테스트도 통과했다.
 새 버전에서 Terraform 모의 테스트 25개, Node.js 테스트 12개, Python 테스트 20개와 서버 설정 조합 4개의 구문·크기 검사를 통과했다.
 실제 AWS 조회 계획은 `terraform/aws` 생성 21개와 `terraform/frontend` 생성 13개다. 두 계획 모두 수정·삭제는 0개다.
@@ -118,11 +118,61 @@ cloudflared 2026.10.1에서 2026.10.2로 설정을 바꿀 때 기존 EC2를 유�
 ./scripts/validate.sh
 ```
 
-## 다음 순서
+## 2026-10-21 적용 전 검증과 후속 작업
+
+최신 AWS 배치는 [통합 아키텍처](deployment.md)를 따른다.
+2026-10-21 조회 당시 EC2는 종료 상태였고 프로젝트 VPC·S3·RDS가 없었다.
+당시 AWS 두 스택의 state는 비어 있었다. 2026-10-22 재배포 기록은 아래에 둔다.
+
+2026-10-21에 선택형 RDS MySQL 8.4와 Flyway 테이블 적용 코드를 추가했다.
+적용 절차는 [DB 배포 문서](database.md)를 따른다.
+임시 MySQL에서 58개 테이블·반복 적용·변경한 V1 거부·TLS 검사를 통과했다.
+DB 활성화 계획은 추가 18개, 기존 리소스 변경·삭제 0개다. 실제 RDS 적용은 실행 전이다.
+
+최신 요청에 따라 RDS는 Single-AZ Primary 한 대로 구성한다.
+과거 Multi-AZ 계획은 사용하지 않는다.
+당시 예산 프로필의 AWS 조회 계획은 생성 59개, 변경·삭제 0개였다.
+실제 앱 이미지가 없어 ECS 태스크와 ECS 서비스는 생성하지 않는다.
+Terraform 모의 테스트 25개, Python 테스트 43개, Node 테스트 12개를 통과했다.
+부팅 스크립트 다섯 구성과 아키텍처 렌더링도 검사했다.
+이 계획은 AWS에 적용하지 않았다.
 
 1. Frontend를 수정할 때 [DuckDNS 배포 순서](duckdns-frontend.md)에 따라 `terraform/aws`의 새 계획을 만들고 다시 게시한다.
-2. Backend를 배포할 때 [구축 절차](setup.md)로 EC2·DuckDNS를 재생성한다. OCI·ECR 배포는 후속 구현한다.
+2. [ECS 예산 구성](ecs-budget.md)으로 EC2·RDS·ECS 기반을 준비한다. 실제 이미지 두 개가 완성되면 앱을 연결한다.
 3. `/api/*` 원본 HTTPS·세션·CSRF·SSE와 외부 포트 차단을 확인한다.
 4. [Cloudflare 연결 조건](cloudflare-manual.md)을 확인하고 수동 설정한다.
 5. [GitOps 자동 배포](gitops.md)를 구현한다.
 6. 사용을 마치면 [AWS 전체 정리](teardown.md)로 리소스와 저장 데이터를 삭제한다.
+
+
+## 2026-10-21 최종 예산 조건
+
+- 월 예산은 50,000원이다. 이전 30,000원 조건을 대체한다.
+- DB는 Single-AZ Primary 한 대다. 이전 Multi-AZ 조건을 대체한다.
+- EC2 c7i-flex.large 한 대에서 Gateway와 모듈형 Service 컨테이너 두 개를 실행한다.
+- ECS 기반과 ECR을 준비한다. 실제 앱 이미지가 없으면 태스크를 생성하지 않는다.
+- 평일 서울 시간 11:00에 시작하고 매일 18:00에 중지한다. 18:30에 중지를 재시도한다.
+- 기존 OpenStudy-Infra/main과 서울 리전 openstudy.duckdns.org을 유지한다.
+- 상세 비용과 적용 조건은 [ECS 예산 문서](ecs-budget.md)를 따른다.
+
+
+## 2026-10-22 웹서버 변경
+
+- Caddy를 공식 Debian Nginx 1.30.6 이미지로 교체했다.
+- HTTPS는 Nginx ACME 모듈로 발급·갱신한다. 키는 EBS의 비공개 디렉터리에 보관한다.
+- 테스트 로그인은 기존 SSM bcrypt 해시를 사용한다. 비밀번호 원문은 추가하지 않는다.
+- 정적 파일·SPA·API 프록시 설정과 아키텍처를 Nginx 기준으로 변경했다.
+- Terraform 모의 테스트 25개·Python 테스트 43개·Node 테스트 12개를 통과했다.
+- 전환 코드 검증 당시에는 사용자 요청으로 로컬 Docker를 재시작하지 않았다. 이후 별도 요청으로 AWS에 적용했다.
+
+
+## 2026-10-22 AWS 적용
+
+같은 OpenStudy-Infra/main과 서울 리전의 `openstudy.duckdns.org`에 적용했다.
+계정에서 허용한 c7i-flex.large·AMD64·4GiB를 사용한다.
+최초 배포의 RDS 자동 백업 1일 설정은 이후 사용자 요청으로 0일로 변경했다. 최종 스냅샷도 생략한다.
+Nginx 1.30.6·Frontend·Single-AZ RDS·ECS·ECR·운영 스케줄을 생성했다.
+HTTPS 정적 웹과 실제 DB의 업무 테이블 58개·Flyway 이력 1개를 확인했다.
+DB TLS·UTC 설정, 스케줄 세 개의 활성화와 Lambda 시작 요청을 검증했다.
+Gateway·Service 이미지는 구현 전이므로 앱 태스크는 0개다. live API는 503을 반환한다.
+최종 Terraform 계획은 `No changes`다. 상세 결과는 [적용 기록](ecs-budget.md#2026-10-22-aws-적용)을 따른다.

@@ -1,8 +1,12 @@
 locals {
-  architecture = var.instance_type == "t4g.small" ? "arm64" : "x86_64"
-  rpm_arch     = var.instance_type == "t4g.small" ? "aarch64" : "x86_64"
-  token_path   = "/${var.name_prefix}/cloudflared/token"
-  duckdns_path = "/${var.name_prefix}/duckdns/token"
+  architecture             = startswith(var.instance_type, "t4g.") ? "arm64" : "x86_64"
+  rpm_arch                 = startswith(var.instance_type, "t4g.") ? "aarch64" : "x86_64"
+  token_path               = "/${var.name_prefix}/cloudflared/token"
+  duckdns_path             = "/${var.name_prefix}/duckdns/token"
+  server_availability_zone = coalesce(var.server_availability_zone, data.aws_availability_zones.available.names[0])
+  database_availability_zones = concat([local.server_availability_zone], [
+    for zone in data.aws_availability_zones.available.names : zone if zone != local.server_availability_zone
+  ])
 
   user_data = templatefile("${path.module}/templates/bootstrap.sh.tftpl", {
     aws_region            = var.aws_region
@@ -15,8 +19,13 @@ locals {
     duckdns_path          = local.duckdns_path
     duckdns_update_script = file("${path.module}/../../scripts/duckdns-update.py")
     enable_frontend       = var.enable_frontend
-    frontend_caddy_image  = var.frontend_caddy_image
-    frontend_caddyfile    = local.frontend_caddyfile
+    frontend_nginx_image  = var.frontend_nginx_image
+    frontend_nginx_config = local.frontend_nginx_config
+    test_login_script     = file("${path.module}/templates/test-login.js")
+    enable_test_login     = local.frontend_test_login
+    test_login_path       = "/${var.name_prefix}/frontend/test-login"
+    enable_ecs            = var.enable_ecs
+    ecs_cluster_name      = "${var.name_prefix}-apps"
   })
 }
 
@@ -38,7 +47,7 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.42.1.0/24"
-  availability_zone = data.aws_availability_zones.available.names[0]
+  availability_zone = local.server_availability_zone
   tags              = { Name = "${var.name_prefix}-public" }
 }
 
@@ -172,8 +181,11 @@ resource "aws_instance" "server" {
     http_put_response_hop_limit = 1
   }
 
-  credit_specification {
-    cpu_credits = "standard"
+  dynamic "credit_specification" {
+    for_each = startswith(var.instance_type, "t") ? [1] : []
+    content {
+      cpu_credits = "standard"
+    }
   }
 
   root_block_device {
@@ -194,6 +206,11 @@ resource "aws_instance" "server" {
     }
 
     precondition {
+      condition     = contains(data.aws_availability_zones.available.names, local.server_availability_zone)
+      error_message = "Choose an available AZ in the target region."
+    }
+
+    precondition {
       condition     = !var.enable_frontend || (var.enable_duckdns && contains(var.web_ingress_cidrs, "0.0.0.0/0"))
       error_message = "DuckDNS static hosting requires enable_duckdns = true and public HTTP/HTTPS via web_ingress_cidrs = [\"0.0.0.0/0\"]."
     }
@@ -204,6 +221,9 @@ resource "aws_instance" "server" {
     aws_iam_role_policy.session_manager,
     aws_iam_role_policy.tunnel_token,
     aws_iam_role_policy.duckdns,
+    aws_iam_role_policy.frontend_test_login,
+    aws_iam_role_policy_attachment.ecs_host,
+    aws_ecs_cluster.apps,
   ]
 
   tags = { Name = var.name_prefix }

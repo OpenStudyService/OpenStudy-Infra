@@ -173,8 +173,8 @@ run "duckdns_static_hosting" {
     frontend_source_dir = "../frontend/tests/fixtures/frontend"
   }
   assert {
-    condition     = output.frontend_url == "https://openstudy.duckdns.org" && strcontains(local.user_data, "caddy:2.11.7-alpine") && strcontains(local.user_data, "systemctl start openstudy-duckdns.service") && strcontains(local.frontend_caddyfile, "root * /srv/openstudy/current")
-    error_message = "The DuckDNS website must configure Caddy HTTPS and update DNS before starting the web server."
+    condition     = output.frontend_url == "https://openstudy.duckdns.org" && strcontains(local.user_data, "nginx:1.30.6") && strcontains(local.user_data, "systemctl start openstudy-duckdns.service") && strcontains(local.frontend_nginx_config, "root /srv/openstudy/current;")
+    error_message = "The DuckDNS website must configure Nginx HTTPS and update DNS before starting the web server."
   }
   assert {
     condition     = length(terraform_data.frontend_deployment) == 1 && aws_s3_bucket.frontend_artifacts[0].force_destroy && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_acls && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_policy
@@ -189,6 +189,28 @@ run "reject_static_hosting_without_public_https" {
     frontend_source_dir = "../frontend/tests/fixtures/frontend"
   }
   expect_failures = [aws_instance.server]
+}
+
+run "explicit_demo_hosting" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    frontend_api_mode   = "mock"
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    frontend_source_dir = "../frontend/tests/fixtures/frontend"
+  }
+  assert {
+    condition     = terraform_data.frontend_deployment[0].triggers_replace.api_mode == "mock" && strcontains(local.frontend_nginx_config, "auth_basic") && strcontains(local.frontend_nginx_config, "auth_basic_user_file /etc/nginx/auth/htpasswd") && strcontains(local.user_data, "/etc/openstudy/nginx-auth/htpasswd.next") && jsondecode(aws_iam_role_policy.frontend_test_login[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/frontend/test-login"
+    error_message = "Demo login must use the server-only password hash loaded from its dedicated SSM parameter."
+  }
+}
+
+run "reject_invalid_frontend_api_mode" {
+  command = plan
+  variables {
+    frontend_api_mode = "invalid"
+  }
+  expect_failures = [var.frontend_api_mode]
 }
 
 run "reject_static_hosting_without_checkout" {
@@ -210,4 +232,31 @@ run "reject_long_artifact_bucket_name" {
     frontend_source_dir = "../frontend/tests/fixtures/frontend"
   }
   expect_failures = [aws_s3_bucket.frontend_artifacts[0]]
+}
+
+run "api_cors_defaults_to_production_origin" {
+  command = plan
+  assert {
+    condition     = local.frontend_cors_allowed_origins == tolist(["https://openstudy.duckdns.org"])
+    error_message = "Credentialed API access must default to the exact production origin."
+  }
+}
+
+run "api_cors_accepts_explicit_development_origins" {
+  command = plan
+  variables {
+    frontend_cors_allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://openstudy.duckdns.org"]
+  }
+  assert {
+    condition     = toset(local.frontend_cors_allowed_origins) == toset(["http://localhost:5173", "http://127.0.0.1:5173", "https://openstudy.duckdns.org"])
+    error_message = "Explicit development origins must be merged with the production origin without duplicates."
+  }
+}
+
+run "reject_unsafe_cors_origins" {
+  command = plan
+  variables {
+    frontend_cors_allowed_origins = ["*", "null", "https://*.example.com", "https://example.com/", "https://example.com/api", "https://user@example.com", "http://localhost:65536", "https://example.com;return 200;", "https://$host"]
+  }
+  expect_failures = [var.frontend_cors_allowed_origins]
 }

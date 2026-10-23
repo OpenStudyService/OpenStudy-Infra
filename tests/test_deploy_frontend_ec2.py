@@ -33,6 +33,7 @@ class FrontendEC2Test(unittest.TestCase):
             "FRONTEND_INSTANCE_ID": "i-0123456789abcdef0",
             "FRONTEND_ASSOCIATION_ID": "association-1",
             "FRONTEND_ARTIFACT_BUCKET": "example-artifacts",
+            "FRONTEND_API_MODE": "live",
         }
 
     def process(self, command, **kwargs):
@@ -49,6 +50,17 @@ class FrontendEC2Test(unittest.TestCase):
         (self.dist / "linked-file").symlink_to(self.dist / "index.html")
         with self.assertRaisesRegex(RuntimeError, "symlinks"):
             publisher.package_release(self.dist, self.root / "release.tar.gz")
+
+    def test_demo_package_includes_worker_and_excludes_source_maps(self):
+        archive = self.root / "release.tar.gz"
+        publisher.package_release(self.dist, archive, "mock")
+        with tarfile.open(archive) as bundle:
+            self.assertEqual(set(bundle.getnames()), {"index.html", "assets/app-abc.js", "mockServiceWorker.js"})
+
+    def test_demo_package_requires_its_worker(self):
+        (self.dist / "mockServiceWorker.js").unlink()
+        with self.assertRaisesRegex(RuntimeError, "mockServiceWorker.js"):
+            publisher.package_release(self.dist, self.root / "release.tar.gz", "mock")
 
     def test_incomplete_build_fails_before_packaging(self):
         (self.dist / "index.html").unlink()
@@ -72,6 +84,34 @@ class FrontendEC2Test(unittest.TestCase):
         wait.assert_called_once_with("ap-northeast-2", "command-1", "i-0123456789abcdef0")
         configuration.assert_called_once_with("ap-northeast-2", "association-1", "i-0123456789abcdef0")
         verify.assert_called_once_with("openstudy.duckdns.org", b"<html>live</html>")
+
+    def test_explicit_demo_mode_builds_and_publishes_the_worker(self):
+        archives = []
+
+        def process(command, **kwargs):
+            if command[:3] == ["aws", "s3", "cp"]:
+                with tarfile.open(command[3]) as bundle:
+                    archives.append(set(bundle.getnames()))
+            return self.process(command, **kwargs)
+
+        with patch.dict(os.environ, {**self.environment, "FRONTEND_API_MODE": "mock"}), \
+                patch.object(publisher.subprocess, "run", side_effect=process) as run, \
+                patch.object(publisher, "aws_json", side_effect=[{"Account": "123456789012"}, {"Command": {"CommandId": "command-1"}}]), \
+                patch.object(publisher, "wait_command"), \
+                patch.object(publisher, "wait_configuration"), \
+                patch.object(publisher, "verify_https"):
+            publisher.deploy()
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands[3], ["npm", "run", "build:demo"])
+        self.assertEqual(run.call_args_list[3].kwargs["env"]["VITE_API_MODE"], "mock")
+        self.assertEqual(archives, [{"index.html", "assets/app-abc.js", "mockServiceWorker.js"}])
+
+    def test_invalid_api_mode_stops_before_build_or_upload(self):
+        with patch.dict(os.environ, {**self.environment, "FRONTEND_API_MODE": "invalid"}), \
+                patch.object(publisher.subprocess, "run") as run:
+            with self.assertRaisesRegex(RuntimeError, "FRONTEND_API_MODE"):
+                publisher.deploy()
+        run.assert_not_called()
 
     def test_wrong_account_stops_before_build_or_upload(self):
         with patch.dict(os.environ, self.environment), \

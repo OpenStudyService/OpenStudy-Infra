@@ -1,0 +1,21 @@
+bash <<'OPENSTUDY_DATABASE'
+set -euo pipefail
+umask 077
+task_database_tmp=$(mktemp -d /run/openstudy-database-XXXXXX)
+trap 'rm -rf "$task_database_tmp"' EXIT
+for task_attempt in $(seq 1 12); do
+  if aws s3 cp 's3://${bucket}/schema/${source_hash}/migrate-database.py' "$task_database_tmp/migrate-database.py" --region '${region}' --only-show-errors; then
+    break
+  fi
+  sleep 5
+done
+printf '%s  %s\n' '${script_hash}' "$task_database_tmp/migrate-database.py" | sha256sum --check --status
+export AWS_REGION='${region}'
+export DATABASE_ARTIFACT_BUCKET='${bucket}'
+export DATABASE_SOURCE_HASH='${source_hash}'
+export DATABASE_HOST='${host}'
+export DATABASE_NAME='${database_name}'
+export DATABASE_SECRET_ARN='${secret_arn}'
+export DATABASE_MIGRATIONS='${migrations}'
+python3 "$task_database_tmp/migrate-database.py"
+OPENSTUDY_DATABASE

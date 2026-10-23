@@ -18,7 +18,7 @@ output "tunnel_token_parameter_name" {
 
 output "container_platform" {
   description = "Required platform for application images."
-  value       = var.instance_type == "t4g.small" ? "linux/arm64" : "linux/amd64"
+  value       = "linux/${local.architecture == "arm64" ? "arm64" : "amd64"}"
 }
 
 output "public_ipv4" {
@@ -43,4 +43,28 @@ output "server_configuration_association_id" {
 output "frontend_url" {
   description = "HTTPS static website served directly by the EC2 instance through DuckDNS."
   value       = var.enable_frontend ? "https://${local.frontend_hostname}" : null
+}
+
+output "database_endpoint" {
+  description = "Private MySQL host:port; reachable from the EC2 server security group."
+  value       = var.enable_database ? aws_db_instance.database[0].endpoint : null
+}
+
+output "database_name" {
+  value = var.enable_database ? var.database_name : null
+}
+
+output "database_multi_az" {
+  description = "Whether RDS maintains a synchronous standby in a different Availability Zone."
+  value       = var.enable_database ? aws_db_instance.database[0].multi_az : null
+}
+
+output "database_master_secret_arn" {
+  description = "RDS-managed master credential ARN. Terraform never reads the secret value."
+  value       = var.enable_database ? aws_db_instance.database[0].master_user_secret[0].secret_arn : null
+}
+
+output "database_migration_association_id" {
+  description = "SSM association that validates and applies versioned SQL."
+  value       = local.database_schema_enabled ? aws_ssm_association.database_migrations[0].association_id : null
 }

@@ -37,6 +37,27 @@ DOCKER
 systemctl enable --now docker
 systemctl disable --now sshd
 
+%{ if enable_ecs ~}
+dnf install -y ecs-init
+install -d -m 0755 /etc/ecs
+cat > /etc/ecs/ecs.config <<'ECS_CONFIG'
+ECS_CLUSTER=${ecs_cluster_name}
+ECS_RESERVED_MEMORY=768
+ECS_ENABLE_TASK_IAM_ROLE=true
+ECS_AWSVPC_BLOCK_IMDS=true
+ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]
+ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true
+ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=1h
+ECS_IMAGE_CLEANUP_INTERVAL=30m
+ECS_CONFIG
+# The ECS unit waits for cloud-init. Do not block cloud-init on that unit.
+systemctl enable --now --no-block ecs
+%{ else ~}
+if systemctl cat ecs.service >/dev/null 2>&1; then
+  systemctl disable --now ecs
+fi
+%{ endif ~}
+
 cat > /usr/local/sbin/openstudy-cloudflared <<'RUNNER'
 #!/bin/bash
 set -euo pipefail
@@ -130,29 +151,68 @@ fi
 
 %{ if enable_frontend ~}
 install -d -m 0755 /srv/openstudy /srv/openstudy/releases /srv/openstudy/assets
-install -d -m 0700 /var/lib/openstudy-caddy/data /var/lib/openstudy-caddy/config
-cat > /etc/openstudy/Caddyfile <<'CADDYFILE'
-${frontend_caddyfile}
-CADDYFILE
-chmod 0644 /etc/openstudy/Caddyfile
+install -d -m 0700 -o 101 -g 101 /var/lib/openstudy-nginx/acme /etc/openstudy/nginx-auth
+%{ if enable_test_login ~}
+for attempt in {1..12}; do
+  if aws ssm get-parameter --region '${aws_region}' --name '${test_login_path}' \
+    --with-decryption --query Parameter.Value --output text > /etc/openstudy/test-login.env.next 2>/dev/null; then
+    break
+  fi
+  if [ "$attempt" -eq 12 ]; then
+    echo 'Cannot read server test login settings; check SSM registration and permissions.' >&2
+    exit 1
+  fi
+  sleep 5
+done
+python3 - <<'LOGIN_PY'
+from pathlib import Path
+import re
+source = Path('/etc/openstudy/test-login.env.next')
+settings = dict(line.split('=', 1) for line in source.read_text().splitlines() if line)
+email = settings['OPENSTUDY_TEST_LOGIN_EMAIL']
+password_hash = settings['OPENSTUDY_TEST_LOGIN_PASSWORD_HASH']
+if not email or any(c in email for c in ':\r\n ') or not re.fullmatch(r'\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}', password_hash):
+    raise ValueError('Invalid server test login settings')
+Path('/etc/openstudy/nginx-auth/htpasswd.next').write_text(email + ':' + password_hash + '\n')
+source.unlink()
+LOGIN_PY
+chown 101:101 /etc/openstudy/nginx-auth/htpasswd.next
+chmod 0600 /etc/openstudy/nginx-auth/htpasswd.next
+mv /etc/openstudy/nginx-auth/htpasswd.next /etc/openstudy/nginx-auth/htpasswd
+cat > /etc/openstudy/test-login.js <<'LOGIN_JS'
+${test_login_script}
+LOGIN_JS
+chmod 0644 /etc/openstudy/test-login.js
+%{ else ~}
+printf 'export default {};\n' > /etc/openstudy/test-login.js
+chmod 0644 /etc/openstudy/test-login.js
+%{ endif ~}
+cat > /etc/openstudy/nginx.conf <<'NGINX_CONF'
+${frontend_nginx_config}
+NGINX_CONF
+chmod 0644 /etc/openstudy/nginx.conf
 
-# DNS must point at this instance before the ACME certificate checks begin.
+# Update DNS before Nginx starts its ACME HTTP-01 verification.
 systemctl start openstudy-duckdns.service
-docker pull '${frontend_caddy_image}'
-docker run --rm --entrypoint caddy \
-  -v /etc/openstudy/Caddyfile:/etc/caddy/Caddyfile:ro \
-  '${frontend_caddy_image}' validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker pull '${frontend_nginx_image}'
+docker run --rm --entrypoint nginx --user 101:101 --read-only --cap-drop ALL --tmpfs /tmp:size=32m \
+  --add-host host.docker.internal:host-gateway \
+  -v /etc/openstudy/nginx.conf:/etc/nginx/nginx.conf:ro \
+  -v /etc/openstudy/test-login.js:/etc/nginx/test-login.js:ro \
+  -v /etc/openstudy/nginx-auth:/etc/nginx/auth:ro \
+  -v /var/lib/openstudy-nginx/acme:/var/cache/nginx/acme \
+  '${frontend_nginx_image}' -t
 
 cat > /etc/systemd/system/openstudy-web.service <<'WEB_UNIT'
 [Unit]
-Description=OpenStudy DuckDNS HTTPS static website
+Description=OpenStudy Nginx HTTPS website
 Wants=network-online.target
 After=network-online.target docker.service
 Requires=docker.service
 
 [Service]
 ExecStartPre=-/usr/bin/docker rm -f openstudy-web
-ExecStart=/usr/bin/docker run --rm --name openstudy-web --network host --read-only --cap-drop ALL --cap-add NET_BIND_SERVICE --security-opt no-new-privileges --tmpfs /tmp:size=16m -v /etc/openstudy/Caddyfile:/etc/caddy/Caddyfile:ro -v /srv/openstudy:/srv/openstudy:ro -v /var/lib/openstudy-caddy/data:/data -v /var/lib/openstudy-caddy/config:/config ${frontend_caddy_image}
+ExecStart=/usr/bin/docker run --rm --name openstudy-web --entrypoint nginx --user 101:101 --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp:size=32m --add-host host.docker.internal:host-gateway -p 80:8080 -p 443:8443 -v /etc/openstudy/nginx.conf:/etc/nginx/nginx.conf:ro -v /etc/openstudy/test-login.js:/etc/nginx/test-login.js:ro -v /etc/openstudy/nginx-auth:/etc/nginx/auth:ro -v /srv/openstudy:/srv/openstudy:ro -v /var/lib/openstudy-nginx/acme:/var/cache/nginx/acme ${frontend_nginx_image} -g "daemon off;"
 ExecStop=/usr/bin/docker stop -t 10 openstudy-web
 Restart=always
 RestartSec=5
