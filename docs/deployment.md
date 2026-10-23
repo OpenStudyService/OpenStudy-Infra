@@ -1,5 +1,8 @@
 # OpenStudy AWS 아키텍처와 배포 흐름
 
+> 최신 AWS 배치와 운영 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
+> 아래 내용은 이전 S3·CloudFront 배포 경로의 기록이다. 현재 운영 구성은 최신 아키텍처 문서를 기준으로 한다.
+
 [README로 돌아가기](../README.md)
 
 최신 배치와 종료 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
