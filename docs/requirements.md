@@ -176,3 +176,27 @@ HTTPS 정적 웹과 실제 DB의 업무 테이블 58개·Flyway 이력 1개를 �
 DB TLS·UTC 설정, 스케줄 세 개의 활성화와 Lambda 시작 요청을 검증했다.
 Gateway·Service 이미지는 구현 전이므로 앱 태스크는 0개다. live API는 503을 반환한다.
 최종 Terraform 계획은 `No changes`다. 상세 결과는 [적용 기록](ecs-budget.md#2026-10-22-aws-적용)을 따른다.
+
+
+## 2026-10-23 커밋과 Terraform 적용
+
+OpenStudy-Infra/main의 변경을 커밋하고 원격 main에 반영했다.
+기존 AWS 계정·서울 리전·`openstudy.duckdns.org`과 예산 프로필을 유지했다.
+Terraform 1.16.6으로 `profiles/budget.tfvars.example`을 지정해 적용했다.
+결과는 추가 2개·변경 1개·삭제 2개다. SSM 서버 설정 연결과 로컬 게시 항목만 교체했다.
+EC2·RDS·DB 스키마는 교체하거나 변경하지 않았다.
+
+기본 검증은 Terraform 44개·Node.js 12개·Python 43개를 통과했다.
+부팅 스크립트 여섯 구성의 구문과 크기 검사도 통과했다.
+네이티브 Nginx 전용 Python 검사 5개는 실행 파일이 없어 건너뛰었다.
+로컬 Docker 검증은 데몬 시간 초과로 완료하지 못했다.
+테스트 컨테이너의 자동 삭제와 명시적 삭제가 충돌하지 않도록 검증 스크립트를 수정했다.
+Frontend 타입 검사·린트·테스트 37개와 live 빌드를 통과했다.
+
+실제 서버의 Nginx 1.30.6 설정 검사와 Nginx·ECS 서비스 상태 검사를 통과했다.
+공개 HTTPS 인증서와 `/`·`/login`·`/invitations/accept` 응답을 확인했다.
+정적 파일 11개가 로컬 빌드와 일치한다. 없는 파일은 404, HTTP는 HTTPS 308을 반환한다.
+허용한 출처의 CORS 사전 요청은 204, 허용하지 않은 출처는 403을 반환한다.
+적용 시점 DuckDNS A 레코드는 EC2 공인 IPv4 `43.200.70.227`과 일치했다.
+최종 Terraform 계획은 `No changes`다.
+실제 앱 이미지가 없어 live API는 JSON 503을 반환한다.

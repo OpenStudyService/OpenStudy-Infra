@@ -14,9 +14,10 @@ OpenStudy의 AWS 네트워크·EC2·선택형 Single-AZ RDS MySQL과 Frontend �
 Nginx와 향후 Gateway·Service 컨테이너 두 개를 EC2 한 대에 배치한다.
 DB는 Single-AZ RDS Primary 한 대다. 자동 백업과 삭제 시 최종 스냅샷은 만들지 않는다.
 평일 서울 시간 11:00~18:00 운영을 자동화한다. 실제 앱 이미지가 없어 ECS 앱 태스크는 미배포 상태다.
-2026-10-22 사용 종료 후 EC2와 RDS를 모두 중지했다. 다음 자동 시작 예정은 10월 23일 11:00이다.
+2026-10-23에 Terraform apply를 완료했다. EC2와 RDS는 교체하지 않았다.
+Nginx CORS 설정과 정적 웹을 갱신했다. 운영 시간의 EC2 실행과 RDS 사용 가능 상태를 확인했다.
 그림에는 작은 원형 번호와 짧은 영문 서비스 이름만 표시한다. 상세 설명은 그림 밖에 둔다.
-이 갱신은 아키텍처 문서와 그림만 포함한다. Terraform·배포 스크립트 변경은 별도다.
+최신 적용 결과는 [검증 기록](docs/requirements.md#2026-10-23-커밋과-terraform-적용)을 따른다.
 
 ## 실행 환경
 

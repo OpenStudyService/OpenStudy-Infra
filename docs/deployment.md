@@ -1,11 +1,8 @@
 # OpenStudy AWS 아키텍처와 배포 흐름
 
-> 최신 AWS 배치와 운영 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
-> 아래 내용은 이전 S3·CloudFront 배포 경로의 기록이다. 현재 운영 구성은 최신 아키텍처 문서를 기준으로 한다.
-
 [README로 돌아가기](../README.md)
 
-최신 배치와 종료 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
+최신 배치와 운영 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.
 아래는 배포 절차를 함께 다루는 작업 문서다.
 기존 AWS 공식 아이콘을 사용한다.
 그림에는 원형 번호 마커와 짧은 영문 이름만 표시한다.
@@ -17,14 +14,16 @@
 2026-10-22에 Nginx 1.30.6과 Frontend를 서울 리전에 배포했다.
 `https://openstudy.duckdns.org`의 유효한 HTTPS 인증서와 정적 웹 응답을 확인했다.
 RDS 스키마와 운영 스케줄 적용 후 최종 Terraform 계획은 `No changes`다.
-[실제 적용 기록](ecs-budget.md#2026-10-22-aws-적용)을 따른다.
+2026-10-23에 기존 EC2·RDS를 유지하고 CORS 설정과 정적 웹을 갱신했다.
+적용 후 HTTPS·정적 파일·CORS와 최종 계획의 `No changes`를 확인했다.
+[최신 검증 기록](requirements.md#2026-10-23-커밋과-terraform-적용)을 따른다.
 아래 그림은 월 5만 원 예산의 구성이다. 향후 Gateway·Service 경로도 함께 표시한다.
 
 | 구분 | 코드·검증 상태 | 현재 AWS 상태 |
 | --- | --- | --- |
-| DuckDNS·EC2·Nginx 정적 웹 | 서버 `nginx -t`와 공개 HTTPS 검사 통과 | 오늘 사용 종료 후 중지 |
+| DuckDNS·EC2·Nginx 정적 웹 | 서버 `nginx -t`와 공개 HTTPS·CORS 검사 통과 | 2026-10-23 운영 시간에 정상 응답 |
 | 테스트 계정 검증 | mock 모드에서 서버의 bcrypt htpasswd 파일로 검사한다 | 현재 프로필은 live 모드다 |
-| RDS MySQL·Flyway | Single-AZ Primary·58개 업무 테이블과 Flyway 이력 1개 확인 | 오늘 사용 종료 후 중지 |
+| RDS MySQL·Flyway | Single-AZ Primary·58개 업무 테이블과 Flyway 이력 1개 확인 | 2026-10-23 `available`. 이번 적용에서 DB 변경 없음 |
 | S3·CloudFront 선택 경로 | 별도 Terraform 스택에 구현했다 | 삭제 상태 |
 | ECS·ECR·운영 스케줄 | ECS 호스트 연결·ECR 두 개·운영 스케줄 세 개 확인 | 활성화. 앱 태스크는 0개 |
 | Gateway·Service API | 향후 구현이다 | 미배포 |
