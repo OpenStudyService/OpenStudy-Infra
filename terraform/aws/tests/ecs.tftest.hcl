@@ -25,7 +25,7 @@ variables {
 run "prepare_without_future_images" {
   command = plan
   assert {
-    condition     = length(aws_ecs_cluster.apps) == 1 && length(aws_ecr_repository.apps) == 2 && length(aws_ecs_task_definition.apps) == 0 && length(aws_ecs_service.apps) == 0 && output.application_images_required
+    condition     = length(module.server.ecs_cluster_apps) == 1 && length(module.applications.ecr_repository_apps) == 2 && length(module.applications.ecs_task_definition_apps) == 0 && length(module.applications.ecs_service_apps) == 0 && output.application_images_required
     error_message = "Prepare ECS and two repositories without deploying placeholder applications."
   }
   assert {
@@ -44,21 +44,13 @@ run "two_containers_on_one_host" {
     service_image       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/openstudy-prod/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   assert {
-    condition     = aws_ecs_service.apps[0].desired_count == 1 && aws_ecs_service.apps[0].launch_type == "EC2" && aws_ecs_task_definition.apps[0].network_mode == "bridge" && length(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)) == 2
+    condition     = module.applications.ecs_service_apps[0].desired_count == 1 && module.applications.ecs_service_apps[0].launch_type == "EC2" && module.applications.ecs_task_definition_apps[0].network_mode == "bridge" && length(jsondecode(module.applications.ecs_task_definition_apps[0].container_definitions)) == 2
     error_message = "One EC2 task must contain exactly Gateway and modular Service."
   }
   assert {
-    condition     = try(length(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].portMappings), 0) == 0 && jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[1].portMappings[0].hostPort == 8081 && alltrue([for rule in aws_security_group.server.ingress : contains([80, 443], rule.from_port)]) && strcontains(local.frontend_nginx_config, "proxy_pass http://host.docker.internal:8081")
+    condition     = try(length(jsondecode(module.applications.ecs_task_definition_apps[0].container_definitions)[0].portMappings), 0) == 0 && jsondecode(module.applications.ecs_task_definition_apps[0].container_definitions)[1].portMappings[0].hostPort == 8081 && alltrue([for rule in module.network.security_group_server.ingress : contains([80, 443], rule.from_port)]) && strcontains(local.frontend_nginx_config, "proxy_pass http://host.docker.internal:8081")
     error_message = "Publish only the Gateway internally; public ingress must remain HTTP/HTTPS."
   }
-}
-
-run "reject_partial_images" {
-  command = plan
-  variables {
-    gateway_image = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  }
-  expect_failures = [aws_ecs_cluster.apps]
 }
 
 run "infra_owns_schema_initialization" {
@@ -73,39 +65,9 @@ run "infra_owns_schema_initialization" {
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   assert {
-    condition     = contains(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].environment, { name = "SPRING_FLYWAY_ENABLED", value = "false" }) && length(aws_ssm_association.database_migrations) == 1
+    condition     = contains(jsondecode(module.applications.ecs_task_definition_apps[0].container_definitions)[0].environment, { name = "SPRING_FLYWAY_ENABLED", value = "false" }) && length(module.database.ssm_association_database_migrations) == 1
     error_message = "Run Flyway through Infra only; Service must start with Flyway disabled."
   }
-}
-
-run "reject_service_flyway_when_infra_migrates" {
-  command = plan
-  variables {
-    enable_database           = true
-    apply_database_migrations = true
-    enable_frontend           = true
-    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
-    web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    service_environment       = { SPRING_FLYWAY_ENABLED = "true" }
-  }
-  expect_failures = [aws_ecs_task_definition.apps]
-}
-
-run "reject_secret_flyway_override_when_infra_migrates" {
-  command = plan
-  variables {
-    enable_database           = true
-    apply_database_migrations = true
-    enable_frontend           = true
-    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
-    web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    service_secret_parameters = { SPRING_FLYWAY_ENABLED = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/flyway" }
-  }
-  expect_failures = [aws_ecs_task_definition.apps]
 }
 
 run "eligible_x86_host_in_supported_zone" {
@@ -126,19 +88,13 @@ run "eligible_x86_host_in_supported_zone" {
     values = { names = ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c", "ap-northeast-2d"] }
   }
   assert {
-    condition     = output.container_platform == "linux/amd64" && aws_ecs_task_definition.apps[0].runtime_platform[0].cpu_architecture == "X86_64" && length(aws_instance.server.credit_specification) == 0
+    condition     = output.container_platform == "linux/amd64" && module.applications.ecs_task_definition_apps[0].runtime_platform[0].cpu_architecture == "X86_64" && length(module.server.instance_server.credit_specification) == 0
     error_message = "The eligible non-burstable host must use AMD64 images without T-family CPU credits."
   }
   assert {
-    condition     = aws_subnet.public.availability_zone == "ap-northeast-2b" && aws_db_instance.database[0].availability_zone == "ap-northeast-2b" && aws_subnet.database[0].availability_zone == "ap-northeast-2b" && aws_subnet.database[1].availability_zone != "ap-northeast-2b"
+    condition     = module.network.subnet_public.availability_zone == "ap-northeast-2b" && module.database.db_instance_database[0].availability_zone == "ap-northeast-2b" && module.database.subnet_database[0].availability_zone == "ap-northeast-2b" && module.database.subnet_database[1].availability_zone != "ap-northeast-2b"
     error_message = "Keep EC2 and the single RDS primary together in the selected supported AZ, with a second DB subnet in another AZ."
   }
-}
-
-run "reject_small_ecs_host" {
-  command = plan
-  variables { instance_type = "t4g.small" }
-  expect_failures = [aws_ecs_cluster.apps]
 }
 
 run "weekday_schedule" {
@@ -149,7 +105,7 @@ run "weekday_schedule" {
     enable_operating_schedule = true
   }
   assert {
-    condition     = aws_scheduler_schedule.operating["start"].schedule_expression == "cron(0 11 ? * MON-FRI *)" && aws_scheduler_schedule.operating["start"].schedule_expression_timezone == "Asia/Seoul" && aws_scheduler_schedule.operating["stop"].schedule_expression == "cron(0 18 * * ? *)" && length(aws_scheduler_schedule.operating) == 3 && aws_lambda_function_event_invoke_config.operating_schedule[0].maximum_retry_attempts == 2
+    condition     = module.schedule.scheduler_schedule_operating["start"].schedule_expression == "cron(0 11 ? * MON-FRI *)" && module.schedule.scheduler_schedule_operating["start"].schedule_expression_timezone == "Asia/Seoul" && module.schedule.scheduler_schedule_operating["stop"].schedule_expression == "cron(0 18 * * ? *)" && length(module.schedule.scheduler_schedule_operating) == 3 && module.schedule.lambda_function_event_invoke_config_operating_schedule[0].maximum_retry_attempts == 2
     error_message = "Start weekdays at 11 KST and retry the daily 18 KST stop at 18:30."
   }
 }

@@ -1,90 +1,3 @@
-variable "enable_ecs" {
-  description = "Prepare ECS on the existing EC2 host. No application runs until both image digests are supplied."
-  type        = bool
-  default     = false
-}
-
-variable "gateway_image" {
-  description = "Future Gateway image matching container_platform, pinned as registry/repository@sha256:<digest>."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.gateway_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.gateway_image))
-    error_message = "Supply an immutable image digest, or null until the image exists."
-  }
-}
-
-variable "service_image" {
-  description = "Future modular Service image matching container_platform, pinned by digest."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.service_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.service_image))
-    error_message = "Supply an immutable image digest, or null until the image exists."
-  }
-}
-
-variable "gateway_environment" {
-  description = "Non-secret Gateway environment. Its upstream contract is SERVICE_URL=http://service:8080."
-  type        = map(string)
-  default     = {}
-}
-
-variable "service_environment" {
-  description = "Non-secret Service environment. Infra owns migrations unless explicitly handed over."
-  type        = map(string)
-  default     = {}
-}
-
-variable "service_secret_parameters" {
-  description = "Service environment name => existing SSM SecureString ARN using the default SSM KMS key. Never supply secret values."
-  type        = map(string)
-  default     = {}
-  validation {
-    condition = alltrue([for arn in values(var.service_secret_parameters) :
-      startswith(arn, "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.name_prefix}/apps/")
-    ])
-    error_message = "Use this account's SSM parameter ARNs under /<name_prefix>/apps/."
-  }
-}
-
-locals {
-  apps_enabled = var.enable_ecs && var.gateway_image != null && var.service_image != null
-  ecs_trust_policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
-  })
-}
-
-resource "aws_ecs_cluster" "apps" {
-  count = var.enable_ecs ? 1 : 0
-  name  = "${var.name_prefix}-apps"
-  setting {
-    name  = "containerInsights"
-    value = "disabled"
-  }
-  lifecycle {
-    precondition {
-      condition     = contains(["t4g.medium", "c7i-flex.large"], var.instance_type) && var.root_volume_size_gib >= 30
-      error_message = "The ECS profile requires a supported 4 GiB host and at least 30 GiB root storage."
-    }
-    precondition {
-      condition     = (var.gateway_image == null) == (var.service_image == null)
-      error_message = "Supply both Gateway and Service images together, or leave both null."
-    }
-    precondition {
-      condition     = !local.apps_enabled || (var.enable_frontend && var.frontend_api_mode == "live")
-      error_message = "Application routing requires enable_frontend=true and frontend_api_mode=live."
-    }
-  }
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_host" {
-  count      = var.enable_ecs ? 1 : 0
-  role       = aws_iam_role.server.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
-}
-
 resource "aws_ecr_repository" "apps" {
   for_each             = var.enable_ecs ? toset(["gateway", "service"]) : toset([])
   name                 = "${var.name_prefix}/${each.key}"
@@ -118,7 +31,7 @@ resource "aws_cloudwatch_log_group" "apps" {
 resource "aws_iam_role" "ecs_execution" {
   count              = var.enable_ecs ? 1 : 0
   name               = "${var.name_prefix}-ecs-execution"
-  assume_role_policy = local.ecs_trust_policy
+  assume_role_policy = var.ecs_trust_policy
 }
 
 resource "aws_iam_role_policy" "ecs_execution" {
@@ -140,11 +53,11 @@ resource "aws_iam_role_policy" "ecs_execution" {
 resource "aws_iam_role" "ecs_task" {
   count              = var.enable_ecs ? 1 : 0
   name               = "${var.name_prefix}-ecs-task"
-  assume_role_policy = local.ecs_trust_policy
+  assume_role_policy = var.ecs_trust_policy
 }
 
 resource "aws_ecs_task_definition" "apps" {
-  count                    = local.apps_enabled ? 1 : 0
+  count                    = var.apps_enabled ? 1 : 0
   family                   = "${var.name_prefix}-apps"
   requires_compatibilities = ["EC2"]
   network_mode             = "bridge"
@@ -154,11 +67,11 @@ resource "aws_ecs_task_definition" "apps" {
   task_role_arn            = aws_iam_role.ecs_task[0].arn
   runtime_platform {
     operating_system_family = "LINUX"
-    cpu_architecture        = local.architecture == "arm64" ? "ARM64" : "X86_64"
+    cpu_architecture        = var.architecture == "arm64" ? "ARM64" : "X86_64"
   }
   lifecycle {
     precondition {
-      condition = !local.database_schema_enabled || (
+      condition = !var.database_schema_enabled || (
         lower(lookup(var.service_environment, "SPRING_FLYWAY_ENABLED", "false")) == "false" &&
         !contains(keys(var.service_secret_parameters), "SPRING_FLYWAY_ENABLED")
       )
@@ -202,9 +115,9 @@ resource "aws_ecs_task_definition" "apps" {
 }
 
 resource "aws_ecs_service" "apps" {
-  count                              = local.apps_enabled ? 1 : 0
+  count                              = var.apps_enabled ? 1 : 0
   name                               = "${var.name_prefix}-apps"
-  cluster                            = aws_ecs_cluster.apps[0].id
+  cluster                            = var.ecs_cluster_apps_id
   task_definition                    = aws_ecs_task_definition.apps[0].arn
   desired_count                      = 1
   launch_type                        = "EC2"
@@ -215,17 +128,5 @@ resource "aws_ecs_service" "apps" {
     enable   = true
     rollback = true
   }
-  depends_on = [aws_ssm_association.server, aws_iam_role_policy.ecs_execution, aws_db_instance.database, aws_ssm_association.database_migrations]
-}
-
-output "ecs_cluster_name" {
-  value = var.enable_ecs ? aws_ecs_cluster.apps[0].name : null
-}
-
-output "application_images_required" {
-  value = var.enable_ecs && !local.apps_enabled
-}
-
-output "ecr_repositories" {
-  value = { for name, repo in aws_ecr_repository.apps : name => repo.repository_url }
+  depends_on = [aws_iam_role_policy.ecs_execution]
 }

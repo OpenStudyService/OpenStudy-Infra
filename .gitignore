@@ -1,4 +1,7 @@
 .terraform/
+terraform/modules/**/.terraform.lock.hcl
+terraform/aws/.module-move-*/
+terraform/aws/tests/module_moves_*.tftest.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan

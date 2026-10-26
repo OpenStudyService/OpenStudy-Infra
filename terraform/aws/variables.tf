@@ -1,3 +1,59 @@
+variable "enable_ecs" {
+  description = "Prepare ECS on the existing EC2 host. No application runs until both image digests are supplied."
+  type        = bool
+  default     = false
+}
+
+variable "gateway_image" {
+  description = "Future Gateway image matching container_platform, pinned as registry/repository@sha256:<digest>."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.gateway_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.gateway_image))
+    error_message = "Supply an immutable image digest, or null until the image exists."
+  }
+}
+
+variable "service_image" {
+  description = "Future modular Service image matching container_platform, pinned by digest."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.service_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.service_image))
+    error_message = "Supply an immutable image digest, or null until the image exists."
+  }
+}
+
+variable "gateway_environment" {
+  description = "Non-secret Gateway environment. Its upstream contract is SERVICE_URL=http://service:8080."
+  type        = map(string)
+  default     = {}
+}
+
+variable "service_environment" {
+  description = "Non-secret Service environment. Infra owns migrations unless explicitly handed over."
+  type        = map(string)
+  default     = {}
+}
+
+variable "service_secret_parameters" {
+  description = "Service environment name => existing SSM SecureString ARN using the default SSM KMS key. Never supply secret values."
+  type        = map(string)
+  default     = {}
+  validation {
+    condition = alltrue([for arn in values(var.service_secret_parameters) :
+      startswith(arn, "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.name_prefix}/apps/")
+    ])
+    error_message = "Use this account's SSM parameter ARNs under /<name_prefix>/apps/."
+  }
+}
+
+variable "enable_operating_schedule" {
+  description = "Start EC2/RDS weekdays at 11:00 KST; stop daily at 18:00 with an 18:30 retry. Start-up takes additional time."
+  type        = bool
+  default     = false
+}
+
 variable "aws_account_id" {
   description = "AWS account verified with STS before applying."
   type        = string

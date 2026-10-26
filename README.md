@@ -1,5 +1,7 @@
 # OpenStudy-Infra
 
+Terraform의 변경 전·후 구조와 기능별 담당은 [AWS 모듈 구성](docs/terraform-modules.md)을 참고한다.
+
 OpenStudy의 AWS 네트워크·EC2·선택형 Single-AZ RDS MySQL과 Frontend 정적 웹 배포를 Terraform으로 관리한다.
 `openstudy.duckdns.org`을 EC2 공인 IP에 자동 연결하고 HTTPS 정적 웹을 제공한다.
 필요할 때 생성하고 사용 후 AWS 리소스와 저장 데이터를 모두 삭제한다.

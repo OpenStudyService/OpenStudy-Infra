@@ -170,11 +170,12 @@ RDS·네트워크의 최신 배치는 1절의 AWS 배치도를 기준으로 한�
 
 ## 근거와 편집
 
-- [AWS 네트워크·EC2 코드](../terraform/aws/main.tf)
-- [Frontend 배포 코드](../terraform/aws/frontend.tf)
-- [RDS·마이그레이션 코드](../terraform/aws/database.tf)
-- [ECS·ECR 코드](../terraform/aws/ecs.tf)
-- [운영 스케줄 코드](../terraform/aws/schedule.tf)
+- [AWS 모듈 연결 코드](../terraform/aws/modules.tf)
+- [네트워크 코드](../terraform/modules/aws/network/main.tf) · [EC2·서버 설정 코드](../terraform/modules/aws/server/main.tf)
+- [Frontend 배포 코드](../terraform/modules/aws/frontend/main.tf)
+- [RDS·마이그레이션 코드](../terraform/modules/aws/database/main.tf)
+- [ECS 앱·ECR 코드](../terraform/modules/aws/applications/main.tf)
+- [운영 스케줄 코드](../terraform/modules/aws/schedule/main.tf)
 - [예산 계산](../scripts/estimate-budget.py)
 - [Nginx 설정](../terraform/aws/templates/nginx.conf.tftpl)
 - [AWS 공식 아키텍처 아이콘](https://aws.amazon.com/architecture/icons/)

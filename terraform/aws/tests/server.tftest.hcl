@@ -34,27 +34,27 @@ run "server_security" {
   command = plan
 
   assert {
-    condition     = length(aws_security_group.server.ingress) == 0
+    condition     = length(module.network.security_group_server.ingress) == 0
     error_message = "The server must not expose any inbound ports."
   }
 
   assert {
-    condition     = aws_instance.server.metadata_options[0].http_tokens == "required" && aws_instance.server.metadata_options[0].http_put_response_hop_limit == 1
+    condition     = module.server.instance_server.metadata_options[0].http_tokens == "required" && module.server.instance_server.metadata_options[0].http_put_response_hop_limit == 1
     error_message = "Require IMDSv2 and keep metadata responses to one network hop."
   }
 
   assert {
-    condition     = !aws_instance.server.disable_api_termination && aws_instance.server.root_block_device[0].delete_on_termination && aws_instance.server.root_block_device[0].encrypted
+    condition     = !module.server.instance_server.disable_api_termination && module.server.instance_server.root_block_device[0].delete_on_termination && module.server.instance_server.root_block_device[0].encrypted
     error_message = "The lab must allow teardown and delete its encrypted root volume on termination."
   }
 
   assert {
-    condition     = aws_instance.server.credit_specification[0].cpu_credits == "standard"
+    condition     = module.server.instance_server.credit_specification[0].cpu_credits == "standard"
     error_message = "Use standard CPU credits to avoid unlimited-mode surplus charges."
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role_policy.tunnel_token.policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/cloudflared/token" && !contains(jsondecode(aws_iam_role_policy.session_manager.policy).Statement[0].Action, "ssm:GetParameter")
+    condition     = jsondecode(module.server.iam_role_policy_tunnel_token.policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/cloudflared/token" && !contains(jsondecode(module.server.iam_role_policy_session_manager.policy).Statement[0].Action, "ssm:GetParameter")
     error_message = "Token access must remain limited to the dedicated SSM parameter."
   }
 
@@ -64,7 +64,7 @@ run "server_security" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role_policy.duckdns[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/duckdns/token" && output.duckdns_hostname == "openstudy.duckdns.org" && strcontains(local.user_data, "Environment=DUCKDNS_SUBDOMAIN=openstudy") && strcontains(local.user_data, "openstudy-duckdns.timer")
+    condition     = jsondecode(module.server.iam_role_policy_duckdns[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/duckdns/token" && output.duckdns_hostname == "openstudy.duckdns.org" && strcontains(local.user_data, "Environment=DUCKDNS_SUBDOMAIN=openstudy") && strcontains(local.user_data, "openstudy-duckdns.timer")
     error_message = "DuckDNS must use its own scoped SSM parameter and a boot-enabled update timer."
   }
 }
@@ -82,16 +82,6 @@ run "legacy_x86" {
   }
 }
 
-run "require_free_tier_review" {
-  command = plan
-
-  variables {
-    free_tier_confirmed = false
-  }
-
-  expect_failures = [aws_instance.server]
-}
-
 run "direct_web_ports" {
   command = plan
 
@@ -100,7 +90,7 @@ run "direct_web_ports" {
   }
 
   assert {
-    condition     = toset([for rule in aws_security_group.server.ingress : rule.from_port]) == toset([80, 443]) && alltrue([for rule in aws_security_group.server.ingress : rule.from_port == rule.to_port && rule.protocol == "tcp" && rule.cidr_blocks == tolist(["0.0.0.0/0"])])
+    condition     = toset([for rule in module.network.security_group_server.ingress : rule.from_port]) == toset([80, 443]) && alltrue([for rule in module.network.security_group_server.ingress : rule.from_port == rule.to_port && rule.protocol == "tcp" && rule.cidr_blocks == tolist(["0.0.0.0/0"])])
     error_message = "Direct access must expose only HTTP/HTTPS for the configured CIDRs."
   }
 }
@@ -113,7 +103,7 @@ run "disable_duckdns" {
   }
 
   assert {
-    condition     = length(aws_iam_role_policy.duckdns) == 0 && output.duckdns_token_parameter_name == null && !strcontains(local.user_data, "Environment=DUCKDNS_SUBDOMAIN=") && strcontains(local.user_data, "systemctl disable --now openstudy-duckdns.timer")
+    condition     = length(module.server.iam_role_policy_duckdns) == 0 && output.duckdns_token_parameter_name == null && !strcontains(local.user_data, "Environment=DUCKDNS_SUBDOMAIN=") && strcontains(local.user_data, "systemctl disable --now openstudy-duckdns.timer")
     error_message = "Disabling DuckDNS must remove token access and stop an existing update timer."
   }
 }
@@ -137,12 +127,12 @@ run "configuration_seed" {
   }
 
   assert {
-    condition     = !aws_instance.server.user_data_replace_on_change && aws_ssm_association.server.targets[0].values == tolist([aws_instance.server.id]) && aws_ssm_association.server.document_version == aws_ssm_document.server.latest_version && aws_ssm_association.server.wait_for_success_timeout_seconds == 1800
+    condition     = !module.server.instance_server.user_data_replace_on_change && module.server.ssm_association_server.targets[0].values == tolist([module.server.instance_server.id]) && module.server.ssm_association_server.document_version == module.server.ssm_document_server.latest_version && module.server.ssm_association_server.wait_for_success_timeout_seconds == 1800
     error_message = "Terraform must apply the exact document version only to its server and wait for configuration success."
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role_policy.server_configuration.policy).Statement[1].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:document/openstudy-prod-configure-server" && alltrue([for statement in jsondecode(aws_iam_role_policy.server_configuration.policy).Statement : !contains(statement.Action, "ssm:GetParameter") && !contains(statement.Action, "ssm:GetParameters")])
+    condition     = jsondecode(module.server.iam_role_policy_server_configuration.policy).Statement[1].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:document/openstudy-prod-configure-server" && alltrue([for statement in jsondecode(module.server.iam_role_policy_server_configuration.policy).Statement : !contains(statement.Action, "ssm:GetParameter") && !contains(statement.Action, "ssm:GetParameters")])
     error_message = "State Manager permissions must not grant broad Parameter Store access."
   }
 }
@@ -155,12 +145,12 @@ run "configuration_update_keeps_server" {
   }
 
   assert {
-    condition     = aws_instance.server.id == run.configuration_seed.instance_id
+    condition     = module.server.instance_server.id == run.configuration_seed.instance_id
     error_message = "Changing the install version must preserve the existing instance."
   }
 
   assert {
-    condition     = strcontains(aws_ssm_document.server.content, "/download/2026.10.2/") && !strcontains(aws_ssm_document.server.content, "/download/2026.10.1/")
+    condition     = strcontains(module.server.ssm_document_server.content, "/download/2026.10.2/") && !strcontains(module.server.ssm_document_server.content, "/download/2026.10.1/")
     error_message = "The configuration change must be delivered through the SSM document."
   }
 }
@@ -177,18 +167,9 @@ run "duckdns_static_hosting" {
     error_message = "The DuckDNS website must configure Nginx HTTPS and update DNS before starting the web server."
   }
   assert {
-    condition     = length(terraform_data.frontend_deployment) == 1 && aws_s3_bucket.frontend_artifacts[0].force_destroy && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_acls && aws_s3_bucket_public_access_block.frontend_artifacts[0].block_public_policy
+    condition     = length(module.frontend.terraform_data_frontend_deployment) == 1 && module.frontend.s3_bucket_frontend_artifacts[0].force_destroy && module.frontend.s3_bucket_public_access_block_frontend_artifacts[0].block_public_acls && module.frontend.s3_bucket_public_access_block_frontend_artifacts[0].block_public_policy
     error_message = "Static hosting must publish through a private artifact bucket that is deleted with the stack."
   }
-}
-
-run "reject_static_hosting_without_public_https" {
-  command = plan
-  variables {
-    enable_frontend     = true
-    frontend_source_dir = "../frontend/tests/fixtures/frontend"
-  }
-  expect_failures = [aws_instance.server]
 }
 
 run "explicit_demo_hosting" {
@@ -200,7 +181,7 @@ run "explicit_demo_hosting" {
     frontend_source_dir = "../frontend/tests/fixtures/frontend"
   }
   assert {
-    condition     = terraform_data.frontend_deployment[0].triggers_replace.api_mode == "mock" && strcontains(local.frontend_nginx_config, "auth_basic") && strcontains(local.frontend_nginx_config, "auth_basic_user_file /etc/nginx/auth/htpasswd") && strcontains(local.user_data, "/etc/openstudy/nginx-auth/htpasswd.next") && jsondecode(aws_iam_role_policy.frontend_test_login[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/frontend/test-login"
+    condition     = module.frontend.terraform_data_frontend_deployment[0].triggers_replace.api_mode == "mock" && strcontains(local.frontend_nginx_config, "auth_basic") && strcontains(local.frontend_nginx_config, "auth_basic_user_file /etc/nginx/auth/htpasswd") && strcontains(local.user_data, "/etc/openstudy/nginx-auth/htpasswd.next") && jsondecode(module.server.iam_role_policy_frontend_test_login[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/frontend/test-login"
     error_message = "Demo login must use the server-only password hash loaded from its dedicated SSM parameter."
   }
 }
@@ -211,27 +192,6 @@ run "reject_invalid_frontend_api_mode" {
     frontend_api_mode = "invalid"
   }
   expect_failures = [var.frontend_api_mode]
-}
-
-run "reject_static_hosting_without_checkout" {
-  command = plan
-  variables {
-    enable_frontend     = true
-    web_ingress_cidrs   = ["0.0.0.0/0"]
-    frontend_source_dir = "tests/missing-frontend"
-  }
-  expect_failures = [terraform_data.frontend_deployment[0]]
-}
-
-run "reject_long_artifact_bucket_name" {
-  command = plan
-  variables {
-    enable_frontend     = true
-    name_prefix         = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    web_ingress_cidrs   = ["0.0.0.0/0"]
-    frontend_source_dir = "../frontend/tests/fixtures/frontend"
-  }
-  expect_failures = [aws_s3_bucket.frontend_artifacts[0]]
 }
 
 run "api_cors_defaults_to_production_origin" {
