@@ -25,11 +25,44 @@ def run(*arguments, check=True, timeout=180):
     return result
 
 
-def check_schema(archive):
+def check_backend(stage, network, container, backend_jar):
+    shutil.copyfile(backend_jar, stage / "backend.jar")
+    truststore = stage / "certs/truststore.p12"
+    run("keytool", "-importcert", "-noprompt", "-alias", "database",
+        "-file", str(stage / "certs/server-cert.pem"), "-keystore", str(truststore),
+        "-storetype", "PKCS12", "-storepass", "changeit")
+    # This password protects a temporary test CA, not an application credential.
+    url = ("jdbc:mysql://database:3306/openstudy?sslMode=VERIFY_IDENTITY"
+           "&trustCertificateKeyStoreUrl=file:/validation/certs/truststore.p12"
+           "&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=changeit"
+           "&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true")
+    run("docker", "run", "--detach", "--name", container,
+        "--network", network, "--read-only", "--tmpfs", "/tmp:rw,size=128m",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "--mount", f"type=bind,source={stage},target=/validation,readonly",
+        "-e", f"DB_URL={url}", "-e", "DB_USERNAME=root", "-e", "DB_PASSWORD=",
+        "-e", "SPRING_FLYWAY_ENABLED=false", "-e", "SPRING_JPA_HIBERNATE_DDL_AUTO=validate",
+        "eclipse-temurin:21-jre", "java", "-Xmx512m", "-jar", "/validation/backend.jar")
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        logs = run("docker", "logs", container, check=False)
+        output = logs.stdout + logs.stderr
+        if "Started OpenstudyBackendApplication" in output:
+            print("Backend: Hibernate validate and startup passed with Flyway disabled and verified DB TLS.")
+            return
+        running = run("docker", "inspect", "--format", "{{.State.Running}}", container, check=False)
+        if running.stdout.strip() != "true":
+            raise RuntimeError(f"Backend failed to start:\n{output}")
+        time.sleep(2)
+    raise RuntimeError(f"Backend startup timed out:\n{output}")
+
+
+def check_schema(archive, backend_jar=None):
     token = uuid.uuid4().hex[:12]
     network = f"openstudy-db-check-{token}"
     mysql = f"{network}-mysql"
     java = f"{network}-java"
+    application = f"{network}-backend"
     with tempfile.TemporaryDirectory(prefix="openstudy-db-check-") as temporary:
         stage = Path(temporary)
         flyway = stage / "flyway"
@@ -78,14 +111,14 @@ def check_schema(archive):
                     raise RuntimeError("The isolated MySQL did not become ready.")
                 time.sleep(2)
 
-            def flyway_run(check=True):
+            def flyway_run(command="migrate", check=True):
                 return run("docker", "run", "--rm", "--name", java, "--network", network,
                            "--read-only", "--tmpfs", "/tmp:rw,size=128m", "--cap-drop", "ALL",
                            "--security-opt", "no-new-privileges", "--workdir", "/tmp",
                            "--mount", f"type=bind,source={stage},target=/validation,readonly",
                            "-e", "FLYWAY_JAVA_CMD=/opt/java/openjdk/bin/java", "-e", "JAVA_ARGS=-Xmx256m",
                            "eclipse-temurin:21-jre", "/validation/flyway/flyway",
-                           "-configFiles=/validation/flyway.toml", "-outputType=json", "migrate", check=check)
+                           "-configFiles=/validation/flyway.toml", "-outputType=json", command, check=check)
 
             first = json.loads(flyway_run().stdout)
             second = json.loads(flyway_run().stdout)
@@ -93,8 +126,15 @@ def check_schema(archive):
                 raise RuntimeError("Flyway must apply pending SQL once and leave a second run unchanged.")
             count = run("docker", "exec", mysql, "mysql", "--batch", "--skip-column-names", "-e",
                         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='openstudy'").stdout.strip()
-            if count != "59":
-                raise RuntimeError(f"Expected 58 application tables plus Flyway history, received {count}.")
+            if count != "66":
+                raise RuntimeError(f"Expected 65 application tables plus Flyway history, received {count}.")
+            history = run("docker", "exec", mysql, "mysql", "--batch", "--skip-column-names", "-e",
+                          "SELECT version,success FROM openstudy.flyway_schema_history ORDER BY installed_rank").stdout.splitlines()
+            if history != ["1\t1", "2\t1", "3\t1"]:
+                raise RuntimeError(f"Expected successful V1, V2 and V3 history, received {history}.")
+            flyway_run("validate")
+            if backend_jar is not None:
+                check_backend(stage, network, application, backend_jar)
             wrong_host = migration.flyway_configuration(
                 mysql, "openstudy", "root", "", Path("/validation/sql"), Path("/validation/certs/server-cert.pem"),
             )
@@ -119,13 +159,15 @@ def check_schema(archive):
             changed = flyway_run(check=False)
             if changed.returncode == 0 or "checksum" not in (changed.stdout + changed.stderr).lower():
                 raise RuntimeError("Flyway must reject changes to an applied migration.")
-            print("MySQL 8.4.11: 58 tables created; rerun unchanged; modified V1 rejected; TLS rejects wrong host and CA.")
+            print("MySQL 8.4.11: V1-V3 succeeded; 65 tables plus Flyway history; validate passed; rerun unchanged; modified V1 rejected; TLS rejects wrong host and CA.")
         finally:
-            run("docker", "rm", "--force", java, mysql, check=False, timeout=60)
+            run("docker", "rm", "--force", application, java, mysql, check=False, timeout=60)
             run("docker", "network", "rm", network, check=False, timeout=60)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flyway-archive", type=Path, help="Reuse a downloaded official archive; SHA-256 is checked.")
-    check_schema(parser.parse_args().flyway_archive)
+    parser.add_argument("--backend-jar", type=Path, help="Also validate and start a Backend bootJar against the temporary DB; requires Java keytool.")
+    args = parser.parse_args()
+    check_schema(args.flyway_archive, args.backend_jar)

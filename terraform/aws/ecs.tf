@@ -156,6 +156,15 @@ resource "aws_ecs_task_definition" "apps" {
     operating_system_family = "LINUX"
     cpu_architecture        = local.architecture == "arm64" ? "ARM64" : "X86_64"
   }
+  lifecycle {
+    precondition {
+      condition = !local.database_schema_enabled || (
+        lower(lookup(var.service_environment, "SPRING_FLYWAY_ENABLED", "false")) == "false" &&
+        !contains(keys(var.service_secret_parameters), "SPRING_FLYWAY_ENABLED")
+      )
+      error_message = "Infra owns database migrations while apply_database_migrations is enabled. Keep Service Flyway disabled and do not inject SPRING_FLYWAY_ENABLED as a secret."
+    }
+  }
   container_definitions = jsonencode([
     {
       name = "service", image = var.service_image, essential = true, cpu = 768, memory = 2048

@@ -64,8 +64,14 @@ run "private_database_and_migrations" {
     error_message = "Enforce encrypted connections and UTC database sessions."
   }
   assert {
-    condition     = length(aws_s3_object.database_migrations) == 2 && aws_s3_bucket_public_access_block.database_migrations[0].block_public_policy && jsondecode(aws_iam_role_policy.database_migrations[0].policy).Statement[0].Resource == output.database_master_secret_arn && strcontains(aws_ssm_document.database_migrations[0].content, local.database_source_hash) && aws_ssm_association.database_migrations[0].wait_for_success_timeout_seconds == 1800
+    condition     = length(aws_s3_object.database_migrations) == 4 && aws_s3_bucket_public_access_block.database_migrations[0].block_public_policy && jsondecode(aws_iam_role_policy.database_migrations[0].policy).Statement[0].Resource == output.database_master_secret_arn && strcontains(aws_ssm_document.database_migrations[0].content, local.database_source_hash) && aws_ssm_association.database_migrations[0].wait_for_success_timeout_seconds == 1800
     error_message = "Apply immutable SQL through private S3 and SSM with access only to this database secret."
+  }
+  assert {
+    condition = alltrue([for name in ["V1__initial_schema.sql", "V2__foundation_expand.sql", "V3__foundation_validate_and_finalize.sql"] :
+      contains(keys(aws_s3_object.database_migrations), "migrations/${name}") && strcontains(aws_ssm_document.database_migrations[0].content, name)
+    ])
+    error_message = "Publish V1, V2 and V3 and include all three migrations in the SSM command."
   }
 }
 

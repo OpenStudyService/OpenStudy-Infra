@@ -61,6 +61,53 @@ run "reject_partial_images" {
   expect_failures = [aws_ecs_cluster.apps]
 }
 
+run "infra_owns_schema_initialization" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+  assert {
+    condition     = contains(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].environment, { name = "SPRING_FLYWAY_ENABLED", value = "false" }) && length(aws_ssm_association.database_migrations) == 1
+    error_message = "Run Flyway through Infra only; Service must start with Flyway disabled."
+  }
+}
+
+run "reject_service_flyway_when_infra_migrates" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_environment       = { SPRING_FLYWAY_ENABLED = "true" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
+run "reject_secret_flyway_override_when_infra_migrates" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_secret_parameters = { SPRING_FLYWAY_ENABLED = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/flyway" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
 run "eligible_x86_host_in_supported_zone" {
   command = plan
   variables {
