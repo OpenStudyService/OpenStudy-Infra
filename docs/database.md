@@ -89,6 +89,38 @@ EC2에 Amazon Corretto 21을 설치하고 해당 CPU의 Java를 사용한다.
 같은 스키마를 Backend에서도 관리한다면 이 파일과 Flyway 이력을 함께 인계한다.
 Backend의 Hibernate 자동 테이블 생성은 사용하지 않는다.
 
+### Backend V1 파일 대조
+
+운영 DB 조회 전에 두 V1 파일을 읽기 전용으로 비교할 수 있다.
+대조할 Backend 소스를 준비하고 파일 경로를 직접 지정한다.
+다음 예시는 두 저장소가 같은 상위 폴더에 있는 경우다.
+
+```sh
+python3 scripts/compare-v1-migrations.py \
+  database/migrations/V1__initial_schema.sql \
+  ../OpenStudy-Backend/src/main/resources/db/migration/V1__init_schema.sql
+```
+
+결과는 JSON으로 출력한다. 각 파일의 바이트 수·SHA-256·끝 줄바꿈 유무를 포함한다.
+파일을 수정하거나 외부 서비스에 접속하지 않는다. Python 3.9 이상을 사용한다.
+
+| `comparison` | 의미 | 종료 코드 |
+| --- | --- | --- |
+| `identical` | 두 파일의 원문 바이트가 같다. | 0 |
+| `line_endings_only` | LF·CRLF·CR을 LF로 통일하고 마지막 줄바꿈 하나를 제외하면 같다. | 0 |
+| `different` | 위 범위 밖의 차이가 있다. 공백·주석·빈 줄도 비교한다. | 1 |
+
+입력 인수 오류나 파일 읽기 실패는 종료 코드 2로 보고한다.
+이 도구는 SQL 문법이나 의미를 분석하지 않는다.
+종료 코드 0은 파일 대조 결과이며 DB 호환성이나 Flyway 검증 성공을 뜻하지 않는다.
+파일 SHA-256은 Flyway 이력의 SQL checksum(CRC32)과 다르다.
+[Flyway validate](https://documentation.red-gate.com/flyway/reference/commands/validate)는 이름·종류·체크섬 등도 검사한다.
+파일명이 다르면 DB 이력의 설명과 스크립트 이름도 함께 검토한다.
+
+고정한 커밋·파일 해시와 실제 차이는 [2026-10-26 V1 대조 기록](development-log/2026-10-26-v1-migration-comparison.md)에 남겼다.
+
+### 적용 실패 처리
+
 이미 적용한 파일을 바꾸면 Flyway가 중단한다.
 자동 `clean`, `repair`, 기존 스키마의 자동 `baseline`은 실행하지 않는다.
 MySQL DDL은 전체 파일 단위로 되돌릴 수 없다.
@@ -147,7 +179,8 @@ DB 활성화 계획은 추가 18개, 기존 리소스 변경·삭제 0개다.
 
 ECS Service의 기본값은 `SPRING_FLYWAY_ENABLED=false`다. Infra가 SQL을 관리한다.
 Backend의 다른 V1 파일과 기존 Flyway 이력을 섞지 않는다.
-Backend로 소유권을 넘길 때는 먼저 V1 내용과 체크섬을 일치시킨다.
+Backend로 소유권을 넘길 때는 먼저 두 V1 원문과 DB 이력의 버전·설명·스크립트·checksum·성공 여부를 대조한다.
+파일 SHA-256이나 줄바꿈 차이만으로 Flyway 충돌 여부를 판단하지 않는다.
 그다음 `apply_database_migrations=false`와 앱 Flyway 설정을 함께 변경한다.
 기존 V1 체크섬을 자동 repair로 덮어쓰지 않는다.
 
