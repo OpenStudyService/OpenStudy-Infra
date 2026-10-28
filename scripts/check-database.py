@@ -14,9 +14,14 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DATABASE_PASSWORD = "isolated-test-password"
+TEST_MIGRATION_PASSWORD = "m" * 40
+TEST_APP_PASSWORD = "TestOnly#Password&With!Symbols_123456789"
 spec = importlib.util.spec_from_file_location("migration", ROOT / "scripts/migrate-database.py")
 migration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migration)
+account_spec = importlib.util.spec_from_file_location("accounts", ROOT / "scripts/provision-database-accounts.py")
+accounts = importlib.util.module_from_spec(account_spec)
+account_spec.loader.exec_module(accounts)
 
 
 def run(*arguments, check=True, timeout=180):
@@ -41,7 +46,7 @@ def check_backend(stage, network, container, backend_jar):
         "--network", network, "--read-only", "--tmpfs", "/tmp:rw,size=128m",
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
         "--mount", f"type=bind,source={stage},target=/validation,readonly",
-        "-e", f"DB_URL={url}", "-e", "DB_USERNAME=root", "-e", f"DB_PASSWORD={TEST_DATABASE_PASSWORD}",
+        "-e", f"DB_URL={url}", "-e", "DB_USERNAME=openstudy_app", "-e", f"DB_PASSWORD={TEST_APP_PASSWORD}",
         "-e", "SPRING_PROFILES_ACTIVE=prod", "-e", "TRUSTED_PROXIES=127.0.0.1",
         "-e", "SPRING_FLYWAY_ENABLED=false", "-e", "SPRING_JPA_HIBERNATE_DDL_AUTO=validate",
         "eclipse-temurin:21-jre", "java", "-Xmx512m", "-jar", "/validation/backend.jar")
@@ -50,7 +55,7 @@ def check_backend(stage, network, container, backend_jar):
         logs = run("docker", "logs", container, check=False)
         output = logs.stdout + logs.stderr
         if "Started OpenstudyBackendApplication" in output:
-            print("Backend: Hibernate validate and startup passed with Flyway disabled and verified DB TLS.")
+            print("Backend: app account startup and Hibernate validation passed with Flyway disabled and verified DB TLS.")
             return
         running = run("docker", "inspect", "--format", "{{.State.Running}}", container, check=False)
         if running.stdout.strip() != "true":
@@ -91,7 +96,7 @@ def check_schema(archive, backend_jar=None):
         (certs / "server-cert.pem").chmod(0o644)
         config = stage / "flyway.toml"
         valid_config = migration.flyway_configuration(
-            "database", "openstudy", "root", TEST_DATABASE_PASSWORD, Path("/validation/sql"), Path("/validation/certs/server-cert.pem"),
+            "database", "openstudy", "openstudy_migrator", TEST_MIGRATION_PASSWORD, Path("/validation/sql"), Path("/validation/certs/server-cert.pem"),
         )
         config.write_text(valid_config)
         for image in ["mysql:8.4.11", "eclipse-temurin:21-jre"]:
@@ -112,6 +117,9 @@ def check_schema(archive, backend_jar=None):
                 if time.monotonic() > deadline:
                     raise RuntimeError("The isolated MySQL did not become ready.")
                 time.sleep(2)
+
+            setup_sql = accounts.accounts_sql("openstudy", TEST_MIGRATION_PASSWORD, TEST_APP_PASSWORD)
+            run("docker", "exec", mysql, "mysql", "-uroot", f"-p{TEST_DATABASE_PASSWORD}", "-e", setup_sql)
 
             def flyway_run(command="migrate", check=True):
                 return run("docker", "run", "--rm", "--name", java, "--network", network,
@@ -135,10 +143,19 @@ def check_schema(archive, backend_jar=None):
             if history != ["1\t1"]:
                 raise RuntimeError(f"Expected successful consolidated V1 history, received {history}.")
             flyway_run("validate")
+            app_command = ("docker", "exec", mysql, "mysql", "--protocol=TCP", "--host=127.0.0.1", "--ssl-mode=REQUIRED",
+                           "-uopenstudy_app", f"-p{TEST_APP_PASSWORD}", "openstudy", "-e")
+            admin_command = ("docker", "exec", mysql, "mysql", "-uroot", f"-p{TEST_DATABASE_PASSWORD}", "openstudy", "-e")
+            run(*admin_command, "CREATE TABLE permission_probe (id INT PRIMARY KEY)")
+            run(*app_command, "INSERT INTO permission_probe VALUES (1); SELECT * FROM permission_probe; UPDATE permission_probe SET id=2; DELETE FROM permission_probe WHERE id=2")
+            run(*admin_command, "DROP TABLE permission_probe")
+            rejected_ddl = run(*app_command, "CREATE TABLE app_must_not_create (id INT)", check=False)
+            if rejected_ddl.returncode == 0 or "denied" not in rejected_ddl.stderr.lower():
+                raise RuntimeError("The application account must not have DDL permissions.")
             if backend_jar is not None:
                 check_backend(stage, network, application, backend_jar)
             wrong_host = migration.flyway_configuration(
-                mysql, "openstudy", "root", TEST_DATABASE_PASSWORD, Path("/validation/sql"), Path("/validation/certs/server-cert.pem"),
+                mysql, "openstudy", "openstudy_migrator", TEST_MIGRATION_PASSWORD, Path("/validation/sql"), Path("/validation/certs/server-cert.pem"),
             )
             config.write_text(wrong_host.replace("connectRetries = 12", "connectRetries = 0"))
             rejected = flyway_run(check=False)
@@ -149,7 +166,7 @@ def check_schema(archive, backend_jar=None):
                 "-subj", "/CN=untrusted")
             (certs / "untrusted-cert.pem").chmod(0o644)
             wrong_ca = migration.flyway_configuration(
-                "database", "openstudy", "root", TEST_DATABASE_PASSWORD, Path("/validation/sql"), Path("/validation/certs/untrusted-cert.pem"),
+                "database", "openstudy", "openstudy_migrator", TEST_MIGRATION_PASSWORD, Path("/validation/sql"), Path("/validation/certs/untrusted-cert.pem"),
             )
             config.write_text(wrong_ca.replace("connectRetries = 12", "connectRetries = 0"))
             rejected = flyway_run(check=False)
@@ -161,7 +178,7 @@ def check_schema(archive, backend_jar=None):
             changed = flyway_run(check=False)
             if changed.returncode == 0 or "checksum" not in (changed.stdout + changed.stderr).lower():
                 raise RuntimeError("Flyway must reject changes to an applied migration.")
-            print("MySQL 8.4.11: consolidated V1 succeeded; 65 tables plus Flyway history; validate passed; rerun unchanged; modified V1 rejected; TLS rejects wrong host and CA.")
+            print("MySQL 8.4.11: consolidated V1 succeeded; 65 tables plus Flyway history; validate passed; rerun unchanged; modified V1 rejected; app DDL denied; TLS rejects wrong host and CA.")
         finally:
             run("docker", "rm", "--force", application, java, mysql, check=False, timeout=60)
             run("docker", "network", "rm", network, check=False, timeout=60)

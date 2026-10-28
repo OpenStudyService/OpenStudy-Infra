@@ -193,8 +193,8 @@ resource "aws_iam_role_policy" "database_migrations" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_db_instance.database[0].master_user_secret[0].secret_arn
+        Action   = ["ssm:GetParameter"]
+        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.name_prefix}/migrations/db-password"
       },
       {
         Effect   = "Allow"
@@ -224,14 +224,14 @@ resource "aws_ssm_document" "database_migrations" {
       inputs = {
         timeoutSeconds = "1800"
         runCommand = [templatefile("${path.module}/templates/migrate-database.sh.tftpl", {
-          region        = var.aws_region
-          bucket        = aws_s3_bucket.database_migrations[0].id
-          source_hash   = local.database_source_hash
-          script_hash   = filesha256("${path.module}/../../scripts/migrate-database.py")
-          host          = aws_db_instance.database[0].address
-          database_name = var.database_name
-          secret_arn    = aws_db_instance.database[0].master_user_secret[0].secret_arn
-          migrations    = jsonencode({ for source in local.database_migrations : source => filesha256("${local.database_migrations_dir}/${source}") })
+          region             = var.aws_region
+          bucket             = aws_s3_bucket.database_migrations[0].id
+          source_hash        = local.database_source_hash
+          script_hash        = filesha256("${path.module}/../../scripts/migrate-database.py")
+          host               = aws_db_instance.database[0].address
+          database_name      = var.database_name
+          password_parameter = "/${var.name_prefix}/migrations/db-password"
+          migrations         = jsonencode({ for source in local.database_migrations : source => filesha256("${local.database_migrations_dir}/${source}") })
         })]
       }
     }]

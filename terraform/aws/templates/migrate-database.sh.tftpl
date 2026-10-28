@@ -15,7 +15,7 @@ export DATABASE_ARTIFACT_BUCKET='${bucket}'
 export DATABASE_SOURCE_HASH='${source_hash}'
 export DATABASE_HOST='${host}'
 export DATABASE_NAME='${database_name}'
-export DATABASE_SECRET_ARN='${secret_arn}'
+export DATABASE_PASSWORD_PARAMETER='${password_parameter}'
 export DATABASE_MIGRATIONS='${migrations}'
 python3 "$task_database_tmp/migrate-database.py"
 OPENSTUDY_DATABASE

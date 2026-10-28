@@ -66,7 +66,7 @@ GitHub Actions로 게시할 때는 `deploy_frontend = false`를 설정한다.
 ## Backend 배포 설계
 
 RDS MySQL 8.4와 테이블 배포는 [DB 배포 문서](docs/database.md)를 따른다.
-`enable_database = true`로 비공개 RDS 생성과 Flyway 스키마 적용을 연결한다.
+`enable_database = true`로 비공개 RDS를 준비한다. 계정을 생성한 뒤 `apply_database_migrations = true`로 Flyway를 실행한다.
 기본값은 비활성화다. Backend 연결은 별도 작업이다.
 
 ECS·ECR 기반은 구현했다. 앱 이미지 빌드와 GitHub Actions 연결은 후속 작업이다.

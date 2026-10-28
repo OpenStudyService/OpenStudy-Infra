@@ -159,12 +159,15 @@ def migrate():
             verify_digest(sql / name, digest)
         certificate = stage / "rds-ca.pem"
         download(f"https://truststore.pki.rds.amazonaws.com/{region}/{region}-bundle.pem", certificate)
-        response = json.loads(aws("secretsmanager", "get-secret-value", "--secret-id", os.environ["DATABASE_SECRET_ARN"], "--output", "json"))
-        secret = json.loads(response["SecretString"])
+        response = json.loads(aws("ssm", "get-parameter", "--name", os.environ["DATABASE_PASSWORD_PARAMETER"], "--with-decryption", "--output", "json"))
+        parameter = response["Parameter"]
+        if parameter.get("Type") != "SecureString" or not parameter.get("Value"):
+            raise RuntimeError("The migration password must be a non-empty SecureString.")
+        password = parameter["Value"]
         config = stage / "flyway.toml"
         config.write_text(flyway_configuration(
             os.environ["DATABASE_HOST"], os.environ["DATABASE_NAME"],
-            secret["username"], secret["password"], sql, certificate,
+            "openstudy_migrator", password, sql, certificate,
         ))
         config.chmod(0o600)
         result = subprocess.run(
@@ -172,7 +175,7 @@ def migrate():
             env={**os.environ, "FLYWAY_JAVA_CMD": shutil.which("java"), "JAVA_ARGS": "-Xmx256m"},
             capture_output=True, text=True, cwd=stage,
         )
-        output = (result.stdout + result.stderr).replace(secret["password"], "[REDACTED]")
+        output = (result.stdout + result.stderr).replace(password, "[REDACTED]")
         print(output, end="", flush=True)
         if result.returncode != 0:
             raise RuntimeError("Flyway migration failed. Inspect the SSM execution; no automatic repair or clean was run.")

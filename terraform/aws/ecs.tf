@@ -158,6 +158,15 @@ resource "aws_ecs_task_definition" "apps" {
   }
   lifecycle {
     precondition {
+      condition = !var.enable_database || (
+        lookup(var.service_environment, "DB_USERNAME", "openstudy_app") == "openstudy_app" &&
+        !contains(keys(var.service_environment), "DB_PASSWORD") &&
+        !contains(keys(var.service_secret_parameters), "DB_USERNAME") &&
+        contains(keys(var.service_secret_parameters), "DB_PASSWORD")
+      )
+      error_message = "Use the openstudy_app database account and inject DB_PASSWORD from an app SecureString."
+    }
+    precondition {
       condition = !local.database_schema_enabled || (
         lower(lookup(var.service_environment, "SPRING_FLYWAY_ENABLED", "false")) == "false" &&
         !contains(keys(var.service_secret_parameters), "SPRING_FLYWAY_ENABLED")
@@ -170,7 +179,7 @@ resource "aws_ecs_task_definition" "apps" {
       name = "service", image = var.service_image, essential = true, cpu = 768, memory = 2048
       environment = [for key, value in merge({
         SERVER_PORT = "8080", SPRING_FLYWAY_ENABLED = "false"
-      }, var.service_environment) : { name = key, value = value }]
+      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment) : { name = key, value = value }]
       secrets = [for key, arn in var.service_secret_parameters : { name = key, valueFrom = arn }]
       healthCheck = {
         command  = ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
