@@ -67,8 +67,8 @@ DB를 끄는 `enable_database = false`는 기존 DB의 삭제를 뜻한다.
 
 ## SQL 관리
 
-첨부한 v0.5 초안을 `database/migrations/V1__initial_schema.sql`에 저장했다.
-업무용 테이블 58개를 포함한다. 계정과 초기 업무 데이터는 넣지 않는다.
+Backend의 통합 `V1__init_schema.sql`을 빈 DB에 적용한다.
+원본과 실행 담당은 [SQL 안내](../database/migrations/README.md)에 기록한다.
 Flyway가 별도로 `flyway_schema_history` 테이블을 생성한다.
 
 Terraform이 SQL과 실행 스크립트를 전용 비공개 S3 버킷에 게시한다.
@@ -89,28 +89,18 @@ EC2에 Amazon Corretto 21을 설치하고 해당 CPU의 Java를 사용한다.
 같은 스키마를 Backend에서도 관리한다면 이 파일과 Flyway 이력을 함께 인계한다.
 Backend의 Hibernate 자동 테이블 생성은 사용하지 않는다.
 
-### 빈 DB에 V1~V3 처음 적용
+### 빈 DB에 통합 V1 적용
 
-현재 배포 SQL은 기존 V1과 Backend에서 가져온 V2·V3이다.
-파일 원본과 실행 담당은 [SQL 안내](../database/migrations/README.md)에 기록한다.
-기존 RDS의 대상 DB가 비어 있으면 같은 RDS에 세 파일을 순서대로 적용한다.
-버전마다 RDS를 새로 만들지 않는다. V3만 단독으로 실행하지 않는다.
+Terraform은 통합 V1과 실행 스크립트를 S3에 올린다. SSM 작업이 EC2에서 Flyway를 실행한다.
+빈 DB에 적용하면 업무·세션 테이블 65개와 Flyway 이력 테이블 1개가 생긴다.
+이력에는 V1 성공이 남는다. 같은 설정으로 다시 실행하면 추가 적용은 없다.
+Backend는 Flyway를 끄고 Hibernate `ddl-auto=validate`로 기동한다.
 
-Terraform은 세 SQL과 실행 스크립트를 S3에 올리고 기존 EC2의 SSM 작업에서 Flyway를 실행한다.
-초기 적용 후 업무·세션 테이블 65개와 `flyway_schema_history` 1개가 생긴다.
-이력에는 V1·V2·V3 성공이 남는다. 같은 설정으로 다시 실행하면 추가 적용은 0건이다.
-Backend는 `SPRING_FLYWAY_ENABLED=false`, Hibernate `ddl-auto=validate`로 기동한다.
-Infra가 적용하는 동안 Service의 Flyway를 켜거나 설정을 시크릿으로 덮어쓰면 Terraform이 중단한다.
-
-실제 적용 전 빈 DB인지 확인한다. 기존 테이블이나 데이터가 발견되면 적용을 멈추고 별도 업그레이드 절차를 따른다.
-과거 V1 적용 기록을 현재 RDS 상태로 간주하지 않는다.
-사용자가 확인한 현재 RDS는 빈 상태이며, 이 변경에서 실제 RDS 조회나 적용은 수행하지 않는다.
-
-이미 적용한 파일을 바꾸면 Flyway가 중단한다.
+2026-10-28 확인 결과 서울 리전의 기존 RDS는 삭제된 상태다. 실제 DB 적용은 하지 않았다.
+기존 DB에 적용하기 전에는 테이블과 Flyway 이력을 확인한다.
+구형 V1~V3 이력이 있으면 통합 V1을 적용하지 않고 별도 전환 절차를 정한다.
 자동 `clean`, `repair`, 기존 스키마의 자동 `baseline`은 실행하지 않는다.
-MySQL DDL은 전체 파일 단위로 되돌릴 수 없다.
-중간 실패 시 생성된 테이블과 Flyway 이력을 확인한 뒤 복구한다.
-사용 중인 DB에 V1을 수동으로 다시 실행하지 않는다.
+MySQL DDL 실패 시 생성된 테이블과 이력을 확인한 뒤 복구한다.
 
 ## 결과 확인
 
@@ -124,8 +114,8 @@ terraform -chdir=terraform/aws output database_migration_association_id
 
 `database_multi_az` 출력은 `false`여야 한다.
 마지막 출력의 연결 ID로 AWS Systems Manager의 State Manager 실행 결과를 확인한다.
-V1~V3 초기 적용에 성공한 뒤 업무·세션 테이블 65개와 Flyway 이력 테이블 1개가 있어야 한다.
-`flyway_schema_history`의 버전 1·2·3이 모두 성공인지 확인한다.
+통합 V1 초기 적용에 성공한 뒤 업무·세션 테이블 65개와 Flyway 이력 테이블 1개가 있어야 한다.
+`flyway_schema_history`의 버전 1이 성공인지 확인한다.
 같은 파일로 다시 실행하면 SQL을 재적용하지 않는다.
 DB 주소는 비공개 주소다. 로컬 PC에서 바로 접속할 수 없다.
 자동으로 전환할 대기 DB는 없다. 장애 시 복구 시간이 필요하다.
@@ -150,7 +140,7 @@ Docker와 OpenSSL이 있는 환경에서 실제 스키마를 검사할 수 있�
 python3 scripts/check-database.py
 ```
 
-이 검증은 빈 DB의 V1~V3 적용·이력·테이블 생성, Flyway validate, TLS 인증서·호스트 이름 검사, 두 번째 적용의 무변경과 V1 변경 거부를 확인한다.
+이 검증은 빈 DB의 통합 V1 적용·이력·테이블 생성, Flyway validate, TLS 인증서·호스트 이름 검사, 두 번째 적용의 무변경과 V1 변경 거부를 확인한다.
 Backend의 실행 JAR을 준비하면 같은 임시 DB에 연결해 Hibernate validate와 서버 기동도 확인할 수 있다.
 Java 21의 `keytool`이 필요하다. 임시 DB에만 적용하는 테스트용 인증서를 사용한다.
 
@@ -172,12 +162,9 @@ DB 활성화 계획은 추가 18개, 기존 리소스 변경·삭제 0개다.
 실제 RDS 생성과 ECS 앱의 DB 연결은 아직 검증하지 않았다.
 
 ECS Service의 기본값은 `SPRING_FLYWAY_ENABLED=false`다. Infra가 SQL을 관리한다.
-Backend의 다른 V1 파일과 기존 Flyway 이력을 섞지 않는다.
-Backend로 소유권을 넘길 때는 먼저 V1 파일 이름·설명·원문과 실제 Flyway 이력을 대조한다.
-Infra의 V1 이름은 `V1__initial_schema.sql`이고 Backend는 `V1__init_schema.sql`이다.
-현재는 Infra가 실행하므로 Backend의 Flyway는 끈다. 파일 SHA-256과 Flyway checksum을 같은 값으로 취급하지 않는다.
-그다음 `apply_database_migrations=false`와 앱 Flyway 설정을 함께 변경한다.
-기존 V1 체크섬을 자동 repair로 덮어쓰지 않는다.
+구형 V1~V3 이력과 통합 V1을 섞지 않는다.
+파일 SHA-256과 Flyway checksum을 같은 값으로 취급하지 않는다.
+기존 체크섬을 자동 repair로 덮어쓰지 않는다.
 
 ## 삭제
 

@@ -1,5 +1,7 @@
 # 빈 DB의 V1~V3 초기 적용 준비
 
+> 과거 검증 기록이다. 현재 SQL 기준은 Backend의 통합 V1이다. 최신 결정은 2026-10-28 기록을 따른다.
+
 작업일: 2026-10-26 (Asia/Seoul).
 관련 이슈: [Infra #1](https://github.com/OpenStudyService/OpenStudy-Infra/issues/1).
 
