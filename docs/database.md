@@ -7,7 +7,8 @@
 네트워크와 서비스 배치는 [최신 AWS 아키텍처](deployment.md#1-aws-배치도)를 따른다.
 기본 DB 한 대를 EC2와 같은 AZ에 둔다. 대기 DB는 생성하지 않는다.
 
-`terraform/aws`에서 `enable_database = true`를 설정하면 RDS와 테이블을 함께 생성한다.
+`terraform/aws`에서 `enable_database = true`를 설정하면 RDS를 생성한다.
+계정을 준비한 뒤 `apply_database_migrations = true`로 테이블을 생성한다.
 기본값은 `false`다. 기존 웹 배포만 실행할 때는 DB를 생성하지 않는다.
 
 - RDS MySQL 8.4.11, `db.t4g.micro`, 암호화한 gp3 20GiB를 사용한다.
@@ -39,7 +40,7 @@ DB 인스턴스 한 대의 실행 시간과 저장 공간을 과금한다. 중�
 
 ```hcl
 enable_database           = true
-apply_database_migrations = true
+apply_database_migrations = false
 database_name             = "openstudy"
 database_engine_version   = "8.4.11"
 database_instance_class   = "db.t4g.micro"
@@ -58,12 +59,39 @@ terraform -chdir=terraform/aws apply database.tfplan
 
 계획에서 `multi_az = false`와 Primary 한 대를 확인한다.
 `enable_frontend = true`인 구성은 기존 Frontend 빌드 실행 환경도 필요하다.
-Single-AZ RDS 준비가 끝나면 SSM이 EC2에서 Flyway를 실행한다. Terraform은 최대 30분 동안 성공을 기다린다.
+RDS를 생성한 뒤 아래의 계정 준비 절차를 실행한다. 그다음 `apply_database_migrations = true`로 변경한다.
+SSM이 EC2에서 Flyway를 실행한다. Terraform은 최대 30분 동안 성공을 기다린다.
 테이블 생성만 실패하면 DB는 남는다. 오류를 확인하고 새 계획을 적용한다.
 
-스키마 적용을 나중에 실행하려면 `apply_database_migrations = false`로 DB만 생성한다.
+`apply_database_migrations`의 기본값은 `false`다. 계정을 준비하기 전에는 `true`로 바꾸지 않는다.
 이 값을 `true`로 바꾸고 다시 적용하면 테이블을 생성한다.
 DB를 끄는 `enable_database = false`는 기존 DB의 삭제를 뜻한다.
+
+## DB 계정 준비
+
+RDS를 만들고 마이그레이션을 실행하기 전에 계정을 준비한다. 실제 RDS 생성에는 비용이 발생할 수 있다.
+
+| 계정 | 권한 | 용도 |
+| --- | --- | --- |
+| `openstudy_migrator` | 해당 DB의 DDL과 DML | Infra Flyway |
+| `openstudy_app` | 해당 DB의 SELECT, INSERT, UPDATE, DELETE | Backend와 OWNER 초기화 |
+
+1. `/<name_prefix>/migrations/db-password`와 `/<name_prefix>/apps/db-password`를 SSM Parameter Store의 Standard SecureString으로 준비한다. 기본 SSM KMS 키를 사용한다. 서로 다른 비밀번호를 사용한다.
+2. 비밀번호는 각각 32~128자의 영문·숫자·밑줄·하이픈으로 만든다. 값은 Git, Terraform 변수, 명령 기록, SSM 명령 출력에 넣지 않는다.
+3. RDS에 TLS로 접속할 수 있는 관리 환경에서 [계정 생성 스크립트](../scripts/provision-database-accounts.py)를 실행한다. MySQL 8.4 클라이언트와 AWS CLI가 필요하다. 실행 주체는 두 SecureString과 RDS 관리자 시크릿을 읽을 권한이 필요하다. 서버의 평상시 Flyway 역할에 이 관리자 권한을 추가하지 않는다.
+4. AWS의 RDS CA 번들을 관리 환경에 준비한다. 다음 명령의 값은 Terraform 출력에서 확인한다. 비밀번호는 인수에 넣지 않는다.
+
+```sh
+python3 scripts/provision-database-accounts.py \
+  --region ap-northeast-2 --prefix openstudy-prod \
+  --host <RDS-호스트명> --database openstudy \
+  --master-secret-arn <RDS-관리자-시크릿-ARN> --ca-file <RDS-CA-파일>
+```
+
+스크립트는 TLS 인증서와 호스트 이름을 검증한다. 기존 계정이 있으면 중단한다.
+계정 생성이 중간에 실패하면 일부 계정이 남을 수 있다. DB 상태를 확인한 뒤 수동으로 복구한다.
+앱 설정의 `DB_USERNAME`은 `openstudy_app`이다. `DB_PASSWORD`에는 앱 SecureString ARN을 전달한다.
+계정 준비 후에만 `apply_database_migrations = true`로 설정한다.
 
 ## SQL 관리
 
@@ -74,7 +102,8 @@ Flyway가 별도로 `flyway_schema_history` 테이블을 생성한다.
 Terraform이 SQL과 실행 스크립트를 전용 비공개 S3 버킷에 게시한다.
 파일 해시가 바뀌면 새 SSM 문서 버전을 적용한다.
 SSM은 다운로드한 파일의 SHA-256을 확인한다.
-EC2는 실행 시점에만 Secrets Manager에서 관리자 정보를 읽는다.
+Flyway는 실행 시점에 Parameter Store에서 마이그레이션 계정의 비밀번호를 읽는다.
+Runner에는 RDS 관리자 시크릿 읽기 권한을 부여하지 않는다.
 비밀번호를 포함한 임시 설정은 `/run`에 권한 600으로 만들고 실행 종료 시 삭제한다.
 SSM 문서와 Terraform 출력에는 비밀번호가 없다.
 
@@ -119,7 +148,7 @@ terraform -chdir=terraform/aws output database_migration_association_id
 같은 파일로 다시 실행하면 SQL을 재적용하지 않는다.
 DB 주소는 비공개 주소다. 로컬 PC에서 바로 접속할 수 없다.
 자동으로 전환할 대기 DB는 없다. 장애 시 복구 시간이 필요하다.
-애플리케이션용 제한 권한 계정과 Backend 연결은 별도 작업이다.
+실제 AWS 계정 생성과 Backend 연결은 배포 시 별도로 확인한다.
 기존 웹의 테스트 로그인과 브라우저 저장 방식은 이 작업으로 변경하지 않는다.
 
 ## 검증

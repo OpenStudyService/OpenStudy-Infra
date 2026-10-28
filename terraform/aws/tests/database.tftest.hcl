@@ -37,7 +37,10 @@ run "database_disabled_by_default" {
 
 run "private_database_and_migrations" {
   command = apply
-  variables { enable_database = true }
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+  }
 
   assert {
     condition     = aws_instance.server.id == run.database_disabled_by_default.instance_id
@@ -64,7 +67,7 @@ run "private_database_and_migrations" {
     error_message = "Enforce encrypted connections and UTC database sessions."
   }
   assert {
-    condition     = length(aws_s3_object.database_migrations) == 2 && aws_s3_bucket_public_access_block.database_migrations[0].block_public_policy && jsondecode(aws_iam_role_policy.database_migrations[0].policy).Statement[0].Resource == output.database_master_secret_arn && strcontains(aws_ssm_document.database_migrations[0].content, local.database_source_hash) && aws_ssm_association.database_migrations[0].wait_for_success_timeout_seconds == 1800
+    condition     = length(aws_s3_object.database_migrations) == 2 && aws_s3_bucket_public_access_block.database_migrations[0].block_public_policy && jsondecode(aws_iam_role_policy.database_migrations[0].policy).Statement[0].Resource == "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/migrations/db-password" && strcontains(aws_ssm_document.database_migrations[0].content, local.database_source_hash) && aws_ssm_association.database_migrations[0].wait_for_success_timeout_seconds == 1800
     error_message = "Apply immutable SQL through private S3 and SSM with access only to this database secret."
   }
   assert {
@@ -72,6 +75,15 @@ run "private_database_and_migrations" {
       contains(keys(aws_s3_object.database_migrations), "migrations/${name}") && strcontains(aws_ssm_document.database_migrations[0].content, name)
     ])
     error_message = "Publish the consolidated Backend V1 and include it in the SSM command."
+  }
+}
+
+run "database_requires_explicit_migration_enablement" {
+  command = plan
+  variables { enable_database = true }
+  assert {
+    condition     = length(aws_db_instance.database) == 1 && length(aws_ssm_association.database_migrations) == 0
+    error_message = "Prepare dedicated accounts before enabling Flyway."
   }
 }
 
