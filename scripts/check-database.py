@@ -15,7 +15,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DATABASE_PASSWORD = "isolated-test-password"
 TEST_MIGRATION_PASSWORD = "m" * 40
-TEST_APP_PASSWORD = "a" * 40
+TEST_APP_PASSWORD = "TestOnly#Password&With!Symbols_123456789"
 spec = importlib.util.spec_from_file_location("migration", ROOT / "scripts/migrate-database.py")
 migration = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(migration)

@@ -77,7 +77,7 @@ RDS를 만들고 마이그레이션을 실행하기 전에 계정을 준비한�
 | `openstudy_app` | 해당 DB의 SELECT, INSERT, UPDATE, DELETE | Backend와 OWNER 초기화 |
 
 1. `/<name_prefix>/migrations/db-password`와 `/<name_prefix>/apps/db-password`를 SSM Parameter Store의 Standard SecureString으로 준비한다. 기본 SSM KMS 키를 사용한다. 서로 다른 비밀번호를 사용한다.
-2. 비밀번호는 각각 32~128자의 영문·숫자·밑줄·하이픈으로 만든다. 값은 Git, Terraform 변수, 명령 기록, SSM 명령 출력에 넣지 않는다.
+2. 비밀번호는 각각 32~128자의 출력 가능한 영문 ASCII 문자로 만든다. 공백, 작은따옴표, 역슬래시는 사용할 수 없다. 값은 Git, Terraform 변수, 명령 기록, SSM 명령 출력에 넣지 않는다.
 3. RDS에 TLS로 접속할 수 있는 관리 환경에서 [계정 생성 스크립트](../scripts/provision-database-accounts.py)를 실행한다. MySQL 8.4 클라이언트와 AWS CLI가 필요하다. 실행 주체는 두 SecureString과 RDS 관리자 시크릿을 읽을 권한이 필요하다. 서버의 평상시 Flyway 역할에 이 관리자 권한을 추가하지 않는다.
 4. AWS의 RDS CA 번들을 관리 환경에 준비한다. 다음 명령의 값은 Terraform 출력에서 확인한다. 비밀번호는 인수에 넣지 않는다.
 

@@ -14,8 +14,11 @@ import tempfile
 def accounts_sql(database, migration_password, app_password):
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,63}", database):
         raise ValueError("Invalid database name.")
-    if not all(re.fullmatch(r"[A-Za-z0-9_-]{32,128}", value) for value in (migration_password, app_password)):
-        raise ValueError("Passwords must contain 32-128 ASCII letters, digits, underscores or hyphens.")
+    if not all(
+        32 <= len(value) <= 128 and all(33 <= ord(char) <= 126 and char not in "'\\" for char in value)
+        for value in (migration_password, app_password)
+    ):
+        raise ValueError("Passwords must be 32-128 printable ASCII characters without single quotes or backslashes.")
     if migration_password == app_password:
         raise ValueError("Use a different password for each account.")
     return (
