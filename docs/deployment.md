@@ -88,7 +88,7 @@ ECS는 EC2 한 대에서 Gateway·Service 두 컨테이너를 같은 태스크�
 | 30 | ECS Task | Gateway·Service 컨테이너 두 개를 함께 실행하는 단위다. Nginx 컨테이너는 Task 밖에서 실행한다. |
 
 EC2 IAM Role은 SSM 관리와 지정한 S3·Parameter Store 리소스 조회를 허용한다.
-DB를 활성화하면 해당 RDS 관리자 시크릿과 SQL 배포 버킷 조회 권한을 추가한다.
+마이그레이션을 활성화하면 전용 비밀번호 파라미터와 SQL 배포 버킷 조회 권한을 추가한다.
 실제 시크릿 값과 테스트 계정 비밀번호는 그림·Git·Terraform state에 넣지 않는다.
 앱 비밀번호는 `/openstudy-prod/apps/` 아래 SecureString의 ARN만 ECS에 전달한다.
 앱은 RDS 관리자 계정을 사용하지 않는다.
@@ -103,7 +103,7 @@ DB를 활성화하면 해당 RDS 관리자 시크릿과 SQL 배포 버킷 조회
 | EC2 ↔ SSM | 아웃바운드 HTTPS 443 | SSM 제어 화살표는 논리 방향이다. SSH 인바운드는 열지 않는다. |
 | EC2 → Parameter Store | HTTPS 443 | 토큰과 테스트 로그인 해시를 읽는다. |
 | EC2 → 비공개 S3 | HTTPS 443 | IAM Role로 배포 파일을 내려받고 SHA-256을 검사한다. |
-| EC2 → Secrets Manager | HTTPS 443·DB 선택형 | 마이그레이션 실행 시 관리자 비밀번호를 읽는다. |
+| EC2 → Parameter Store | HTTPS 443·DB 선택형 | 마이그레이션 계정의 비밀번호를 읽는다. |
 | Nginx → Gateway | 컨테이너 → 호스트 TCP 8081 | 실제 앱 이미지 두 개를 지정하면 API 프록시를 켠다. |
 | Gateway → Service | Docker bridge TCP 8080 | 같은 태스크의 내부 이름 `service`로 접속한다. |
 | EC2 Flyway → RDS | TLS·TCP 3306·DB 선택형 | DB 보안 그룹은 EC2 보안 그룹만 허용한다. 인증서와 DB 호스트 이름을 검사한다. |
@@ -135,12 +135,12 @@ DB 시각은 UTC다. 영업일 계산은 애플리케이션에서 서울 시간�
 
 1. `enable_database = true`로 설정한다. 기본값은 `false`다.
 2. 새 계획에서 두 프라이빗 서브넷·RDS의 `multi_az = false`·SQL 버킷·SSM 실행 연결을 확인한다.
-3. 적용하면 AWS가 Primary 한 대를 생성한다. 준비가 끝나면 기존 EC2에서 Flyway를 실행한다.
-4. Flyway가 `V1__initial_schema.sql`의 업무용 테이블 58개와 자체 이력 테이블을 생성한다.
+3. 적용하면 AWS가 Primary 한 대를 생성한다. DB 계정을 별도로 준비한다.
+4. 마이그레이션을 활성화하면 Flyway가 통합 V1과 이력 테이블을 적용한다.
 5. 이후 변경은 V2 이상의 새 SQL 파일로 추가한다. 이미 적용한 V1은 수정하지 않는다.
 
 [DB 배포 절차](database.md)를 따른다.
-`apply_database_migrations = false`이면 DB만 생성할 수 있다.
+기본값 `apply_database_migrations = false`는 DB 계정 준비 전 마이그레이션을 실행하지 않는다.
 Backend API의 업무 데이터 저장과 애플리케이션용 DB 계정은 후속 구현이다.
 
 ### 사용 후 삭제

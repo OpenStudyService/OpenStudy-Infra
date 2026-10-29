@@ -61,11 +61,61 @@ run "reject_partial_images" {
   expect_failures = [aws_ecs_cluster.apps]
 }
 
+run "infra_owns_schema_initialization" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+  assert {
+    condition     = contains(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].environment, { name = "SPRING_FLYWAY_ENABLED", value = "false" }) && length(aws_ssm_association.database_migrations) == 1
+    error_message = "Run Flyway through Infra only; Service must start with Flyway disabled."
+  }
+}
+
+run "reject_service_flyway_when_infra_migrates" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_environment       = { SPRING_FLYWAY_ENABLED = "true" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
+run "reject_secret_flyway_override_when_infra_migrates" {
+  command = plan
+  variables {
+    enable_database           = true
+    apply_database_migrations = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password", SPRING_FLYWAY_ENABLED = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/flyway" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
 run "eligible_x86_host_in_supported_zone" {
   command = plan
   variables {
     instance_type             = "c7i-flex.large"
     server_availability_zone  = "ap-northeast-2b"
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
     enable_database           = true
     apply_database_migrations = false
     enable_frontend           = true
@@ -105,4 +155,34 @@ run "weekday_schedule" {
     condition     = aws_scheduler_schedule.operating["start"].schedule_expression == "cron(0 11 ? * MON-FRI *)" && aws_scheduler_schedule.operating["start"].schedule_expression_timezone == "Asia/Seoul" && aws_scheduler_schedule.operating["stop"].schedule_expression == "cron(0 18 * * ? *)" && length(aws_scheduler_schedule.operating) == 3 && aws_lambda_function_event_invoke_config.operating_schedule[0].maximum_retry_attempts == 2
     error_message = "Start weekdays at 11 KST and retry the daily 18 KST stop at 18:30."
   }
+}
+
+run "reject_database_admin_for_service" {
+  command = plan
+  variables {
+    enable_database           = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_environment       = { DB_USERNAME = "openstudy_admin" }
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
+run "reject_plaintext_database_password_for_service" {
+  command = plan
+  variables {
+    enable_database           = true
+    enable_frontend           = true
+    frontend_source_dir       = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs         = ["0.0.0.0/0"]
+    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_environment       = { DB_PASSWORD = "not-a-secret" }
+    service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
 }

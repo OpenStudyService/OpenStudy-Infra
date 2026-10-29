@@ -171,9 +171,9 @@ variable "enable_database" {
 }
 
 variable "apply_database_migrations" {
-  description = "Apply database/migrations through Flyway on the SSM-managed EC2 server when the database is enabled."
+  description = "Run Flyway only after the dedicated database accounts and SecureString passwords have been prepared."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "database_name" {
