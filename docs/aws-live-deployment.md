@@ -64,3 +64,28 @@ ECS가 health 실패를 감지하면 배포를 실패로 처리한다.
 평일 11시 시작·매일 18시 중지와 18시 30분 중지 재시도 설정을 유지한다.
 
 실제 배포 결과와 검증 범위는 [2026-10-30 기록](development-log/2026-10-30-aws-live-deployment.md)을 따른다.
+
+## 직원 초대 SMTP
+
+`invitation_smtp`를 설정하면 기존 Backend에 Gmail STARTTLS(587)를 연결한다.
+`from_address`, `enabled`, `credentials_version`을 Git 제외 배포 변수에 지정한다.
+초대 링크는 기존 DuckDNS 도메인의 `/invitations/accept`로 자동 생성한다.
+계정·비밀번호는 Terraform `value_wo`와 ephemeral 입력으로 표준 SecureString에 저장한다.
+ECS에는 `/apps/smtp-username`, `/apps/smtp-password`의 ARN만 전달한다.
+계획·state에 실제 비밀번호를 저장하지 않는다. 계정을 변경할 때는 `credentials_version`을 올린다. 새 버전은 ECS 재배포도 유도해 새 값을 읽는다.
+
+SMTP를 구성한 뒤에는 아래 도구로 계획과 적용을 실행한다.
+이 도구는 env의 SMTP 자격증명 두 항목만 읽는다. 로컬 DB·프로필·관리자 설정을 반영하지 않는다.
+
+```sh
+python3 scripts/terraform-smtp.py --env-file /private/path/.env plan -var-file=profiles/budget.tfvars.example -var-file=aws-live.tfvars.json -out=smtp.tfplan
+python3 scripts/terraform-smtp.py --env-file /private/path/.env apply smtp.tfplan
+```
+
+먼저 `enabled=false`로 SMTP 인증과 Backend 기동을 확인한다.
+기존 시험용 대기 초대를 확인한 뒤 `enabled=true`로 다시 적용한다.
+발송 대상 주소를 확인하고 초대를 생성한다. SMTP 접수와 DB 발송 상태를 확인한다.
+시작 시 Gmail 인증을 검증한다. 반복 health 점검은 Gmail에 반복 로그인하지 않도록 메일 점검을 제외한다.
+실제 발송 실패는 초대 발송 작업의 상태와 재시도에서 처리한다.
+
+[Terraform 쓰기 전용 입력](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/ephemeral)

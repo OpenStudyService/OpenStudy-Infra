@@ -111,8 +111,8 @@ resource "aws_iam_role_policy" "ecs_execution" {
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], Resource = [for repo in aws_ecr_repository.apps : repo.arn] },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.apps[0].arn}:*" },
-      ], length(var.service_secret_parameters) == 0 ? [] : [
-      { Effect = "Allow", Action = ["ssm:GetParameters"], Resource = values(var.service_secret_parameters) },
+      ], length(local.app_secret_parameters) == 0 ? [] : [
+      { Effect = "Allow", Action = ["ssm:GetParameters"], Resource = values(local.app_secret_parameters) },
     ])
   })
 }
@@ -137,6 +137,7 @@ resource "aws_ecs_task_definition" "apps" {
     cpu_architecture        = local.architecture == "arm64" ? "ARM64" : "X86_64"
   }
   lifecycle {
+    create_before_destroy = true
     precondition {
       condition = alltrue([for key in ["DB_URL", "TRUSTED_PROXIES"] :
         trimspace(lookup(var.service_environment, key, "")) != ""
@@ -166,8 +167,8 @@ resource "aws_ecs_task_definition" "apps" {
       portMappings = [{ containerPort = 8080, hostPort = 8081, protocol = "tcp" }]
       environment = [for key, value in merge({
         SERVER_PORT = "8080", SPRING_PROFILES_ACTIVE = "prod", SPRING_FLYWAY_ENABLED = "false"
-      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment) : { name = key, value = value }]
-      secrets = [for key, arn in var.service_secret_parameters : { name = key, valueFrom = arn }]
+      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment, local.invitation_smtp_environment) : { name = key, value = value }]
+      secrets = [for key, arn in local.app_secret_parameters : { name = key, valueFrom = arn }]
       healthCheck = {
         command  = ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
         interval = 30, timeout = 5, retries = 3, startPeriod = 120
