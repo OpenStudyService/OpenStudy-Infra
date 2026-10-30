@@ -1,5 +1,6 @@
 # OpenStudy AWS 아키텍처와 배포 흐름
 
+현재 Backend 실행 경로는 Nginx → 단일 Backend → 비공개 RDS다. 최신 설정과 검증은 [AWS live 배포](aws-live-deployment.md)를 따른다.
 [README로 돌아가기](../README.md)
 
 최신 배치와 운영 상태는 [AWS 아키텍처 문서](architecture.md)를 따른다.

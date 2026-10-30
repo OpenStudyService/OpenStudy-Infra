@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-30",
+  "url": "https://openstudy.duckdns.org",
+  "region": "ap-northeast-2",
+  "runtime": "AWS EC2 Nginx + ECS Backend + private RDS",
+  "frontend_commit": "b29aa7bf6baf8dce5841f6fc28ab4dd4228d91e5",
+  "backend_commit": "d5b68f8346f4ae68edde7e8d1b897bd3894bb286",
+  "backend_digest": "sha256:f8f8562668ee4de4d74091bf83b2884b40cfca528b08a6a42993c1165e0000d3",
+  "ecs_health": "HEALTHY",
+  "terraform": {
+    "version": "1.16.6",
+    "apply": {
+      "added": 14,
+      "changed": 3,
+      "destroyed": 6
+    },
+    "final_plan": "No changes",
+    "existing_ec2_and_rds_replaced": false
+  },
+  "local_frontend_backend_and_ssm_tunnel": "stopped before UI verification",
+  "database_history": {
+    "V1": -747993029,
+    "V2": 191084984
+  },
+  "verified": [
+    "login",
+    "branch registration",
+    "category registration and rename",
+    "product registration and price/name update",
+    "revision history",
+    "employee list",
+    "invitation generation and browser reload persistence"
+  ],
+  "test_ids": {
+    "branch": 2,
+    "category": 2,
+    "product": 2,
+    "invitation": 2
+  },
+  "mail_delivery_tested": false,
+  "https_checks": {
+    "http_redirects_to_https": true,
+    "missing_csrf_rejected": 403,
+    "forged_csrf_rejected": 403,
+    "login_status": 200,
+    "session_id_rotated": true,
+    "cookie_attributes": [
+      "Secure",
+      "HttpOnly",
+      "SameSite=Lax",
+      "Path=/"
+    ],
+    "authenticated_me_status": 200,
+    "sse_heartbeat": true,
+    "logout_cookie_expired": true,
+    "logged_out_me_status": 401
+  },
+  "automatic_stop": "18:00 Asia/Seoul",
+  "not_claimed": [
+    "all Infra issue 2 acceptance criteria",
+    "task CRUD",
+    "invitation acceptance and approval",
+    "SMTP delivery"
+  ]
+}
