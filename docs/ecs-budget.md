@@ -10,7 +10,7 @@ Cloudflare나 다른 저장소로 배포 대상을 바꾸지 않는다.
 | --- | --- |
 | 서버 | EC2 `c7i-flex.large` 한 대, AMD64, 메모리 4GiB |
 | 컨테이너 관리 | ECS의 EC2 실행 방식. 클러스터 한 개 |
-| 앱 | Gateway와 모듈형 Service. 같은 ECS 태스크의 컨테이너 두 개 |
+| 앱 | Backend 하나. ECS 태스크의 단일 컨테이너 |
 | 웹 진입점 | Nginx·DuckDNS·HTTPS. Nginx는 호스트의 별도 웹 컨테이너 |
 | DB | RDS MySQL 8.4.11 `db.t4g.micro` Single-AZ Primary 한 대 |
 | DB 백업 | 사용자 요청으로 자동 백업·삭제 시 최종 스냅샷 비활성화. 삭제 보호 유지 |
@@ -19,7 +19,7 @@ Cloudflare나 다른 저장소로 배포 대상을 바꾸지 않는다.
 | 운영 시간 | 평일 11:00 시작, 매일 18:00 중지, 서울 시간 |
 
 애플리케이션 컨테이너는 두 개다. 기존 Nginx와 ECS 에이전트는 별도 기반 프로세스다.
-업무 모듈은 Service 내부에 둔다. ECS 서비스 하나가 두 컨테이너를 함께 배포한다.
+업무 모듈은 Backend 내부에 둔다. ECS 서비스 하나가 Backend 컨테이너 하나를 배포한다.
 ALB·NAT Gateway·Fargate·RDS Standby는 생성하지 않는다.
 현재 계정은 t4g.medium 생성을 허용하지 않아 같은 4GiB의 c7i-flex.large를 사용한다.
 이 계정의 서울 리전에서는 b·d AZ에서 제공된다. 프로필은 `ap-northeast-2b`를 지정한다.
@@ -76,7 +76,7 @@ terraform -chdir=terraform/aws apply budget.tfplan
 ```
 
 프로필은 EC2·ECS 클러스터·ECR·RDS·웹·SQL 적용·운영 스케줄을 준비한다.
-`gateway_image`와 `service_image`는 현재 `null`이다.
+기본 `service_image`는 `null`이다.
 이때 ECS 태스크와 ECS 서비스는 생성하지 않는다. 일반 `/api/*`는 503을 반환한다.
 이미지 준비 전에는 로그인과 업무 API가 동작하는 실제 서비스를 배포한 상태가 아니다.
 
@@ -87,25 +87,22 @@ terraform -chdir=terraform/aws apply budget.tfplan
 작업 후 Lambda에 `{"action":"stop"}`을 호출하거나 다음 중지 스케줄을 기다린다.
 중지된 서버에 SSM 설정·마이그레이션을 적용하려면 먼저 EC2와 RDS를 시작한다.
 
-## 향후 앱 연결
+## Backend 연결
 
-현재 Gateway와 Service는 구현 전이다. 이 작업은 해당 저장소를 수정하지 않는다.
-나중에 두 실제 이미지를 ECR에 올리고 둘 다 SHA-256 다이제스트로 지정한다.
-태그만 지정하거나 이미지 하나만 지정하면 계획을 거부한다.
+Backend main의 실제 운영 이미지를 ECR에 게시하고 `service_image`에 SHA-256 다이제스트를 지정한다.
+태그만 지정한 이미지는 계획을 거부한다. 별도 Gateway 이미지는 사용하지 않는다.
 
-이미지는 다음 계약을 충족해야 한다.
+- `linux/amd64` 이미지의 Backend가 8080 포트를 사용한다.
+- 이미지에 `curl`을 포함한다. `/actuator/health`는 DB 연결 정상 시 200을 반환한다.
+- Backend 메모리는 2,048MiB다. Java 힙과 네이티브 메모리를 포함한다.
+- `prod` 프로필과 Infra 소유 Flyway를 유지한다.
+- `DB_URL`에는 RDS CA 인증서와 호스트 이름 검증을 설정한다.
+- `TRUSTED_PROXIES`에는 실제로 측정한 직접 상대 프록시 주소를 지정한다.
 
-- `linux/amd64`로 빌드한다. 서버는 8080 포트를 사용한다.
-- Gateway는 `SERVICE_URL=http://service:8080`을 사용해 Service로 요청을 전달한다.
-- 각 이미지에 `curl`을 포함한다. `/actuator/health`가 인증 없이 상태 코드 200을 반환해야 한다.
-- Gateway는 메모리 512MiB, Service는 2,048MiB 제한 안에서 실행한다. Java 힙과 네이티브 메모리도 포함한다.
-- Service는 DB 준비가 늦거나 재연결이 필요하면 복구할 수 있어야 한다.
-- DB URL에는 RDS CA 신뢰 설정과 호스트 이름 검증을 적용한다.
-
-외부 요청은 Nginx → `host.docker.internal:8081`의 Gateway → 내부 `service:8080` → RDS로 전달한다.
-Service 포트는 호스트에 게시하지 않는다. 보안 그룹의 외부 허용 포트는 80·443뿐이다.
-ECS 태스크에 AWS 업무 권한은 부여하지 않는다.
-DB 관리자 시크릿은 Flyway 전용이다. 앱에는 제한 권한 MySQL 계정을 별도로 만든다.
+요청은 Nginx → `host.docker.internal:8081` → Backend 컨테이너 8080 → RDS로 전달한다.
+보안 그룹은 외부에 80·443만 허용한다. ECS 태스크에는 AWS 업무 권한을 부여하지 않는다.
+앱은 `openstudy_app` 계정을 사용한다. DB 비밀번호는 SSM ARN으로 주입한다.
+자세한 실행 절차는 [AWS live 배포](aws-live-deployment.md)를 따른다.
 
 앱의 비밀번호는 Parameter Store의 표준 SecureString에 등록한다.
 경로는 `/<name_prefix>/apps/` 아래로 제한한다. 기본 SSM 암호화 키를 사용한다.

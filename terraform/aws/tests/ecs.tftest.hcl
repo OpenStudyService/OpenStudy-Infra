@@ -20,13 +20,17 @@ variables {
   instance_type             = "t4g.medium"
   root_volume_size_gib      = 30
   enable_ecs                = true
+  service_environment = {
+    DB_URL          = "jdbc:mysql://database.example:3306/openstudy?sslMode=VERIFY_IDENTITY"
+    TRUSTED_PROXIES = "172.17.0.1/32"
+  }
 }
 
 run "prepare_without_future_images" {
   command = plan
   assert {
-    condition     = length(aws_ecs_cluster.apps) == 1 && length(aws_ecr_repository.apps) == 2 && length(aws_ecs_task_definition.apps) == 0 && length(aws_ecs_service.apps) == 0 && output.application_images_required
-    error_message = "Prepare ECS and two repositories without deploying placeholder applications."
+    condition     = length(aws_ecs_cluster.apps) == 1 && length(aws_ecr_repository.apps) == 1 && length(aws_ecs_task_definition.apps) == 0 && length(aws_ecs_service.apps) == 0 && output.application_images_required
+    error_message = "Prepare ECS and the Backend repository without deploying placeholder applications."
   }
   assert {
     condition     = output.container_platform == "linux/arm64" && strcontains(local.user_data, "ECS_RESERVED_MEMORY=768") && !strcontains(local.frontend_nginx_config, "proxy_pass")
@@ -34,29 +38,28 @@ run "prepare_without_future_images" {
   }
 }
 
-run "two_containers_on_one_host" {
+run "single_backend_on_existing_host" {
   command = plan
   variables {
     enable_frontend     = true
     frontend_source_dir = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs   = ["0.0.0.0/0"]
-    gateway_image       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/openstudy-prod/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image       = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/openstudy-prod/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   assert {
-    condition     = aws_ecs_service.apps[0].desired_count == 1 && aws_ecs_service.apps[0].launch_type == "EC2" && aws_ecs_task_definition.apps[0].network_mode == "bridge" && length(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)) == 2
-    error_message = "One EC2 task must contain exactly Gateway and modular Service."
+    condition     = aws_ecs_service.apps[0].desired_count == 1 && aws_ecs_service.apps[0].launch_type == "EC2" && aws_ecs_task_definition.apps[0].network_mode == "bridge" && length(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)) == 1
+    error_message = "One EC2 task must run exactly the real Backend."
   }
   assert {
-    condition     = try(length(jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].portMappings), 0) == 0 && jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[1].portMappings[0].hostPort == 8081 && alltrue([for rule in aws_security_group.server.ingress : contains([80, 443], rule.from_port)]) && strcontains(local.frontend_nginx_config, "proxy_pass http://host.docker.internal:8081")
-    error_message = "Publish only the Gateway internally; public ingress must remain HTTP/HTTPS."
+    condition     = jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].portMappings[0].containerPort == 8080 && jsondecode(aws_ecs_task_definition.apps[0].container_definitions)[0].portMappings[0].hostPort == 8081 && alltrue([for rule in aws_security_group.server.ingress : contains([80, 443], rule.from_port)]) && strcontains(local.frontend_nginx_config, "proxy_pass http://host.docker.internal:8081")
+    error_message = "Publish the Backend to the Nginx host route; public ingress must remain HTTP/HTTPS."
   }
 }
 
-run "reject_partial_images" {
+run "reject_backend_without_live_frontend" {
   command = plan
   variables {
-    gateway_image = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    service_image = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   expect_failures = [aws_ecs_cluster.apps]
 }
@@ -70,7 +73,6 @@ run "infra_owns_schema_initialization" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   assert {
@@ -88,9 +90,8 @@ run "reject_service_flyway_when_infra_migrates" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    service_environment       = { SPRING_FLYWAY_ENABLED = "true" }
+    service_environment       = { SPRING_FLYWAY_ENABLED = "true", DB_URL = "jdbc:mysql://database.example:3306/openstudy?sslMode=VERIFY_IDENTITY", TRUSTED_PROXIES = "172.17.0.1/32" }
   }
   expect_failures = [aws_ecs_task_definition.apps]
 }
@@ -103,7 +104,6 @@ run "reject_secret_flyway_override_when_infra_migrates" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password", SPRING_FLYWAY_ENABLED = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/flyway" }
   }
@@ -121,7 +121,6 @@ run "eligible_x86_host_in_supported_zone" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   }
   override_data {
@@ -164,9 +163,8 @@ run "reject_database_admin_for_service" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    service_environment       = { DB_USERNAME = "openstudy_admin" }
+    service_environment       = { DB_USERNAME = "openstudy_admin", DB_URL = "jdbc:mysql://database.example:3306/openstudy?sslMode=VERIFY_IDENTITY", TRUSTED_PROXIES = "172.17.0.1/32" }
     service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
   }
   expect_failures = [aws_ecs_task_definition.apps]
@@ -179,10 +177,21 @@ run "reject_plaintext_database_password_for_service" {
     enable_frontend           = true
     frontend_source_dir       = "../frontend/tests/fixtures/frontend"
     web_ingress_cidrs         = ["0.0.0.0/0"]
-    gateway_image             = "example.com/gateway@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     service_image             = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    service_environment       = { DB_PASSWORD = "not-a-secret" }
+    service_environment       = { DB_PASSWORD = "not-a-secret", DB_URL = "jdbc:mysql://database.example:3306/openstudy?sslMode=VERIFY_IDENTITY", TRUSTED_PROXIES = "172.17.0.1/32" }
     service_secret_parameters = { DB_PASSWORD = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password" }
+  }
+  expect_failures = [aws_ecs_task_definition.apps]
+}
+
+run "reject_missing_prod_environment" {
+  command = plan
+  variables {
+    enable_frontend     = true
+    frontend_source_dir = "../frontend/tests/fixtures/frontend"
+    web_ingress_cidrs   = ["0.0.0.0/0"]
+    service_image       = "example.com/service@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    service_environment = {}
   }
   expect_failures = [aws_ecs_task_definition.apps]
 }
