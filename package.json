@@ -1,0 +1,14 @@
+{
+  "name": "openstudy-gitops-tests",
+  "private": true,
+  "version": "0.0.0",
+  "engines": { "node": ">=24 <27" },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:live": "node --env-file-if-exists=.env.e2e.local node_modules/@playwright/test/cli.js test --config playwright.live.config.ts",
+    "test:e2e:report": "playwright show-report playwright-report/local",
+    "test:e2e:install": "playwright install chromium"
+  },
+  "devDependencies": { "@playwright/test": "1.65.1" }
+}
