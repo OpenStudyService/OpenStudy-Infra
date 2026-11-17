@@ -1,0 +1,95 @@
+name: Playwright E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'package*.json'
+      - 'playwright*.ts'
+      - '.terraform-version'
+      - 'scripts/e2e-stack.py'
+      - 'tests/e2e/**'
+      - 'terraform/aws/templates/**'
+      - '.github/workflows/e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'package*.json'
+      - 'playwright*.ts'
+      - '.terraform-version'
+      - 'scripts/e2e-stack.py'
+      - 'tests/e2e/**'
+      - 'terraform/aws/templates/**'
+      - '.github/workflows/e2e.yml'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Local Nginx checks or the configured e2e environment'
+        type: choice
+        options: [local, live]
+        default: local
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}-${{ inputs.suite || 'local' }}
+  cancel-in-progress: true
+
+jobs:
+  local:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'local'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - id: terraform
+        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ steps.terraform.outputs.version }}
+          terraform_wrapper: false
+      - run: sudo apt-get update && sudo apt-get install -y apache2-utils
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/e2e/reporter.test.cjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-local
+          path: |
+            playwright-report/local/
+            test-results/local/
+          retention-days: 7
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'live'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: e2e
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Test the configured deployment
+        run: npm run test:e2e:live
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_REQUIRE_AI: ${{ vars.E2E_REQUIRE_AI }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+      - uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-live-summary
+          path: test-results/live/summary.json
+          retention-days: 7
