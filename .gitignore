@@ -18,3 +18,8 @@ override.tf.json
 *.key
 __pycache__/
 .DS_Store
+
+# Local AI model archives and verified deployment artifacts.
+/artifacts/ai-model/
+/models.zip
+/.models/

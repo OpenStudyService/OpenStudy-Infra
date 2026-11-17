@@ -18,6 +18,9 @@ GitOps는 애플리케이션 배포를 관리한다.
 
 ## 2. 애플리케이션 배포
 
+AI 모델과 Qwen 설정은 [AI 모델 배포 준비](ai-deployment.md)를 따른다.
+이 선택 설정은 기존 ECS 경로에 모델 전달을 추가한다. 전체 Backend CI/CD는 별도 작업이다.
+
 1. 애플리케이션 저장소에서 테스트를 통과한 소스를 병합한다.
 2. GitHub Actions가 Backend의 OCI 이미지를 빌드한다. `t4g.small`은 `linux/arm64`를 사용한다.
 3. GitHub OIDC로 AWS 역할을 사용한다. 커밋 SHA 태그로 Private ECR에 push한다.
