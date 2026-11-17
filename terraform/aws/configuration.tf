@@ -31,7 +31,7 @@ resource "aws_iam_role_policy" "server_configuration" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Effect = "Allow"
         Action = [
@@ -61,7 +61,11 @@ resource "aws_iam_role_policy" "server_configuration" {
         ]
         Resource = "*"
       },
-    ]
+      ], [for document in aws_ssm_document.ai_model : {
+        Effect   = "Allow"
+        Action   = ["ssm:GetDocument", "ssm:DescribeDocument"]
+        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:document/${document.name}"
+    }])
   })
 }
 

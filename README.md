@@ -65,6 +65,9 @@ GitHub Actions로 게시할 때는 `deploy_frontend = false`를 설정한다.
 
 ## Backend 배포 설계
 
+첨부한 ONNX 모델과 Qwen 설정의 배포 준비는 [AI 모델 배포 준비](docs/ai-deployment.md)를 따른다.
+비공개 S3 전달, 파일 검사, ECS 읽기 전용 마운트와 SSM 키 참조를 제공한다. 기본값은 비활성이다.
+
 RDS MySQL 8.4와 테이블 배포는 [DB 배포 문서](docs/database.md)를 따른다.
 `enable_database = true`로 비공개 RDS를 준비한다. 계정을 생성한 뒤 `apply_database_migrations = true`로 Flyway를 실행한다.
 기본값은 비활성화다. Backend 연결은 별도 작업이다.

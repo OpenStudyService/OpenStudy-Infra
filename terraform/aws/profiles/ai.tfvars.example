@@ -1,0 +1,12 @@
+# Optional overlay after profiles/budget.tfvars.example. See docs/ai-deployment.md.
+# Path is relative to terraform/aws when using terraform -chdir=terraform/aws.
+ai_model_archive_path = "../../artifacts/ai-model/models.zip"
+enable_ai_live        = true
+
+# Replace account/prefix with the existing deployment target.
+# tfvars maps REPLACE earlier maps: retain DB_PASSWORD and every existing app secret.
+# Register the actual values separately as SSM SecureString. Never put keys here.
+service_secret_parameters = {
+  DB_PASSWORD  = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/db-password"
+  QWEN_API_KEY = "arn:aws:ssm:ap-northeast-2:123456789012:parameter/openstudy-prod/apps/qwen-api-key"
+}

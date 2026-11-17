@@ -1,0 +1,2 @@
+Terraform mock-plan input only. This is not a model archive.
+The local verifier rejects this file before a real S3 upload.

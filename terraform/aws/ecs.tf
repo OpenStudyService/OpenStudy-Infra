@@ -65,6 +65,13 @@ resource "aws_ecs_cluster" "apps" {
   }
   lifecycle {
     precondition {
+      condition = !contains(keys(var.service_environment), "QWEN_API_KEY") && alltrue([
+        for key, value in local.ai_environment :
+        lookup(var.service_environment, key, value) == value && !contains(keys(var.service_secret_parameters), key)
+      ])
+      error_message = "Keep QWEN_API_KEY in service_secret_parameters and do not override the managed AI environment."
+    }
+    precondition {
       condition     = contains(["t4g.medium", "c7i-flex.large"], var.instance_type) && var.root_volume_size_gib >= 30
       error_message = "The ECS profile requires a supported 4 GiB host and at least 30 GiB root storage."
     }
@@ -156,6 +163,13 @@ resource "aws_ecs_task_definition" "apps" {
     operating_system_family = "LINUX"
     cpu_architecture        = local.architecture == "arm64" ? "ARM64" : "X86_64"
   }
+  dynamic "volume" {
+    for_each = local.ai_model_enabled ? [local.ai_model_path] : []
+    content {
+      name      = "ai-model"
+      host_path = volume.value
+    }
+  }
   lifecycle {
     precondition {
       condition = !var.enable_database || (
@@ -179,8 +193,11 @@ resource "aws_ecs_task_definition" "apps" {
       name = "service", image = var.service_image, essential = true, cpu = 768, memory = 2048
       environment = [for key, value in merge({
         SERVER_PORT = "8080", SPRING_FLYWAY_ENABLED = "false"
-      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment) : { name = key, value = value }]
+      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment, local.ai_environment) : { name = key, value = value }]
       secrets = [for key, arn in var.service_secret_parameters : { name = key, valueFrom = arn }]
+      mountPoints = local.ai_model_enabled ? [{
+        sourceVolume = "ai-model", containerPath = local.ai_model_path, readOnly = true
+      }] : []
       healthCheck = {
         command  = ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
         interval = 30, timeout = 5, retries = 3, startPeriod = 120
@@ -224,7 +241,7 @@ resource "aws_ecs_service" "apps" {
     enable   = true
     rollback = true
   }
-  depends_on = [aws_ssm_association.server, aws_iam_role_policy.ecs_execution, aws_db_instance.database, aws_ssm_association.database_migrations]
+  depends_on = [aws_ssm_association.server, aws_iam_role_policy.ecs_execution, aws_db_instance.database, aws_ssm_association.database_migrations, aws_ssm_association.ai_model]
 }
 
 output "ecs_cluster_name" {
