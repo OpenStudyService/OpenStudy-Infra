@@ -1,9 +1,15 @@
 # DB 초기 적용 SQL
 
-빈 DB에는 Backend의 V1~V22를 순서대로 적용한다.
+빈 DB에는 Backend의 V1~V22와 Infra의 V23을 순서대로 적용한다.
 V1의 최초 원본은 Backend 커밋 [`f36e451`](https://github.com/OpenStudyService/OpenStudy-Backend/blob/f36e4519848564b17dd8a795a36dfbb63e83eebb/src/main/resources/db/migration/V1__init_schema.sql)이다.
 2026-11-17에 [`c3a45a9`](https://github.com/OpenStudyService/OpenStudy-Backend/tree/c3a45a933cd4b3210b0604a03238bfbd1c80e285/src/main/resources/db/migration)의 V2~V22를 추가했다.
 22개 파일 모두 해당 커밋과 바이트 단위로 같다. 기존 V1은 변경하지 않았다.
+
+V23은 2026-11-17 사용자가 승인한 다중 OWNER 정책을 적용한다.
+`employees.owner_slot`의 단일 OWNER 고유 인덱스만 제거한다. 기존 계정과 이메일 고유 제약은 유지한다.
+Backend의 활성 OWNER 수 검사와 마지막 관리자 보호는 그대로 사용한다.
+V23은 Infra에서 관리하는 후속 버전이다. Backend SQL을 동기화할 때 같은 버전 번호를 덮어쓰지 않는다.
+OWNER 추가 절차는 [운영 문서](../../docs/add-owner.md)에 기록한다.
 
 Infra의 SSM 작업이 전용 마이그레이션 계정으로 Flyway를 실행한다. Backend 운영 환경은 Flyway를 실행하지 않는다.
 계정을 준비한 뒤 마이그레이션을 활성화한다. 자세한 절차는 [DB 배포 문서](../../docs/database.md#db-계정-준비)를 따른다.

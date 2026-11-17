@@ -103,7 +103,8 @@ GRANT CREATE VIEW, SHOW VIEW ON `openstudy`.* TO 'openstudy_migrator'@'%';
 
 ## SQL 관리
 
-Backend의 통합 V1과 후속 V2~V22를 순서대로 적용한다. V1 원본은 변경하지 않는다.
+Backend의 통합 V1과 후속 V2~V22, Infra의 V23을 순서대로 적용한다. V1 원본은 변경하지 않는다.
+V23은 여러 OWNER를 허용한다. [추가 절차](add-owner.md)에서 기존 계정 유지와 검증 방법을 확인한다.
 원본과 실행 담당은 [SQL 안내](../database/migrations/README.md)에 기록한다.
 Flyway가 별도로 `flyway_schema_history` 테이블을 생성한다.
 
