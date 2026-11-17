@@ -31,7 +31,7 @@ variable "name_prefix" {
 }
 
 variable "instance_type" {
-  description = "Server size. The two-container ECS budget profile uses the account-eligible c7i-flex.large."
+  description = "Server size. The single-Backend ECS budget profile uses the account-eligible c7i-flex.large."
   type        = string
   default     = "t4g.small"
 

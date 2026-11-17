@@ -1,33 +1,17 @@
 variable "enable_ecs" {
-  description = "Prepare ECS on the existing EC2 host. No application runs until both image digests are supplied."
+  description = "Prepare ECS on the existing EC2 host. No application runs until the Backend image digest is supplied."
   type        = bool
   default     = false
 }
 
-variable "gateway_image" {
-  description = "Future Gateway image matching container_platform, pinned as registry/repository@sha256:<digest>."
-  type        = string
-  default     = null
-  validation {
-    condition     = var.gateway_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.gateway_image))
-    error_message = "Supply an immutable image digest, or null until the image exists."
-  }
-}
-
 variable "service_image" {
-  description = "Future modular Service image matching container_platform, pinned by digest."
+  description = "Backend image matching container_platform, pinned by immutable digest."
   type        = string
   default     = null
   validation {
     condition     = var.service_image == null ? true : can(regex("^[a-zA-Z0-9./:_-]+@sha256:[a-f0-9]{64}$", var.service_image))
     error_message = "Supply an immutable image digest, or null until the image exists."
   }
-}
-
-variable "gateway_environment" {
-  description = "Non-secret Gateway environment. Its upstream contract is SERVICE_URL=http://service:8080."
-  type        = map(string)
-  default     = {}
 }
 
 variable "service_environment" {
@@ -49,7 +33,7 @@ variable "service_secret_parameters" {
 }
 
 locals {
-  apps_enabled = var.enable_ecs && var.gateway_image != null && var.service_image != null
+  apps_enabled = var.enable_ecs && var.service_image != null
   ecs_trust_policy = jsonencode({
     Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
@@ -69,10 +53,6 @@ resource "aws_ecs_cluster" "apps" {
       error_message = "The ECS profile requires a supported 4 GiB host and at least 30 GiB root storage."
     }
     precondition {
-      condition     = (var.gateway_image == null) == (var.service_image == null)
-      error_message = "Supply both Gateway and Service images together, or leave both null."
-    }
-    precondition {
       condition     = !local.apps_enabled || (var.enable_frontend && var.frontend_api_mode == "live")
       error_message = "Application routing requires enable_frontend=true and frontend_api_mode=live."
     }
@@ -86,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "ecs_host" {
 }
 
 resource "aws_ecr_repository" "apps" {
-  for_each             = var.enable_ecs ? toset(["gateway", "service"]) : toset([])
+  for_each             = var.enable_ecs ? toset(["service"]) : toset([])
   name                 = "${var.name_prefix}/${each.key}"
   image_tag_mutability = "IMMUTABLE"
   force_delete         = false
@@ -131,8 +111,8 @@ resource "aws_iam_role_policy" "ecs_execution" {
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"], Resource = [for repo in aws_ecr_repository.apps : repo.arn] },
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.apps[0].arn}:*" },
-      ], length(var.service_secret_parameters) == 0 ? [] : [
-      { Effect = "Allow", Action = ["ssm:GetParameters"], Resource = values(var.service_secret_parameters) },
+      ], length(local.app_secret_parameters) == 0 ? [] : [
+      { Effect = "Allow", Action = ["ssm:GetParameters"], Resource = values(local.app_secret_parameters) },
     ])
   })
 }
@@ -149,7 +129,7 @@ resource "aws_ecs_task_definition" "apps" {
   requires_compatibilities = ["EC2"]
   network_mode             = "bridge"
   cpu                      = "1024"
-  memory                   = "2560"
+  memory                   = "2048"
   execution_role_arn       = aws_iam_role.ecs_execution[0].arn
   task_role_arn            = aws_iam_role.ecs_task[0].arn
   runtime_platform {
@@ -157,6 +137,13 @@ resource "aws_ecs_task_definition" "apps" {
     cpu_architecture        = local.architecture == "arm64" ? "ARM64" : "X86_64"
   }
   lifecycle {
+    create_before_destroy = true
+    precondition {
+      condition = alltrue([for key in ["DB_URL", "TRUSTED_PROXIES"] :
+        trimspace(lookup(var.service_environment, key, "")) != ""
+      ])
+      error_message = "Set DB_URL and the measured TRUSTED_PROXIES for the prod Backend."
+    }
     precondition {
       condition = !var.enable_database || (
         lookup(var.service_environment, "DB_USERNAME", "openstudy_app") == "openstudy_app" &&
@@ -176,11 +163,12 @@ resource "aws_ecs_task_definition" "apps" {
   }
   container_definitions = jsonencode([
     {
-      name = "service", image = var.service_image, essential = true, cpu = 768, memory = 2048
+      name         = "service", image = var.service_image, essential = true, cpu = 1024, memory = 2048
+      portMappings = [{ containerPort = 8080, hostPort = 8081, protocol = "tcp" }]
       environment = [for key, value in merge({
-        SERVER_PORT = "8080", SPRING_FLYWAY_ENABLED = "false"
-      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment) : { name = key, value = value }]
-      secrets = [for key, arn in var.service_secret_parameters : { name = key, valueFrom = arn }]
+        SERVER_PORT = "8080", SPRING_PROFILES_ACTIVE = "prod", SPRING_FLYWAY_ENABLED = "false"
+      }, var.enable_database ? { DB_USERNAME = "openstudy_app" } : {}, var.service_environment, local.invitation_smtp_environment) : { name = key, value = value }]
+      secrets = [for key, arn in local.app_secret_parameters : { name = key, valueFrom = arn }]
       healthCheck = {
         command  = ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
         interval = 30, timeout = 5, retries = 3, startPeriod = 120
@@ -188,23 +176,6 @@ resource "aws_ecs_task_definition" "apps" {
       logConfiguration = {
         logDriver = "awslogs"
         options   = { awslogs-group = aws_cloudwatch_log_group.apps[0].name, awslogs-region = var.aws_region, awslogs-stream-prefix = "service" }
-      }
-    },
-    {
-      name         = "gateway", image = var.gateway_image, essential = true, cpu = 256, memory = 512
-      links        = ["service:service"]
-      dependsOn    = [{ containerName = "service", condition = "HEALTHY" }]
-      portMappings = [{ containerPort = 8080, hostPort = 8081, protocol = "tcp" }]
-      environment = [for key, value in merge({
-        SERVER_PORT = "8080", SERVICE_URL = "http://service:8080"
-      }, var.gateway_environment) : { name = key, value = value }]
-      healthCheck = {
-        command  = ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health >/dev/null || exit 1"]
-        interval = 30, timeout = 5, retries = 3, startPeriod = 60
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options   = { awslogs-group = aws_cloudwatch_log_group.apps[0].name, awslogs-region = var.aws_region, awslogs-stream-prefix = "gateway" }
       }
     },
   ])

@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-30",
+  "environment": "AWS ap-northeast-2 / openstudy.duckdns.org",
+  "source": "Notion env updated 2026-10-30 14:10 KST",
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "starttls_required": true,
+    "certificate_hostname_verified": true,
+    "debug_enabled": false
+  },
+  "invitation": {
+    "id": 3,
+    "status": "PENDING",
+    "delivery_status": "SENT",
+    "attempts": 1
+  },
+  "inbox": {
+    "inbox_received": true,
+    "subject": "OpenStudy 직원 초대",
+    "recipient": "Rhy***@gmail.com",
+    "acceptance_url": "https://openstudy.duckdns.org/invitations/accept",
+    "token_present_but_not_recorded": true,
+    "received_at_kst": "2026-10-30T15:01:38+09:00",
+    "mailbox_read_only": true
+  },
+  "infrastructure": {
+    "ec2_replaced": false,
+    "rds_changed": false,
+    "security_group_changed": false,
+    "new_service_required": false,
+    "ssm_standard_securestrings_added": 2,
+    "ecs_task_definition_revision": 4,
+    "final_terraform_plan": "No changes"
+  },
+  "secrets": {
+    "input": "ephemeral",
+    "ssm_resource_argument": "value_wo",
+    "password_absent_from_plan_state_and_backups": true
+  },
+  "example_invitation_ids_cancelled": [
+    1,
+    2
+  ],
+  "not_tested": [
+    "invitation acceptance",
+    "manager approval",
+    "new employee activation"
+  ],
+  "tests": {
+    "smtp_terraform": 6,
+    "smtp_env_wrapper": 3
+  }
+}

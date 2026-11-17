@@ -17,6 +17,5 @@ database_skip_final_snapshot   = true
 database_apply_immediately     = true
 enable_operating_schedule      = true
 
-# Both remain null until actual AMD64 application images exist.
-gateway_image                  = null
+# Keep null until the actual AMD64 Backend image digest exists.
 service_image                  = null
