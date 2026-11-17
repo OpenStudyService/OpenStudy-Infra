@@ -18,3 +18,10 @@ override.tf.json
 *.key
 __pycache__/
 .DS_Store
+
+# Playwright dependencies, reports, and local-only test state.
+/node_modules/
+/playwright-report/
+/test-results/
+/playwright/.auth/
+!.env.e2e.example

@@ -155,5 +155,6 @@ RDS를 생성했다면 먼저 [DB 삭제 순서](docs/database.md#삭제)에 따
 - [월 5만 원 ECS 구성과 비용](docs/ecs-budget.md)
 
 전체 로컬 검증은 [검증 스크립트](scripts/validate.sh)를 `./scripts/validate.sh`로 실행한다.
+브라우저 기반 배포 검증은 [Playwright E2E 안내](docs/e2e.md)에 따라 `npm run test:e2e`로 실행한다.
 서버 설정 결과는 SSM 실행 상태와 DNS 응답으로 확인한다.
 Backend HTTPS 원본·실제 API·Cloudflare 연결은 후속 작업으로 진행한다.
