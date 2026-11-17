@@ -18,3 +18,7 @@ override.tf.json
 *.key
 __pycache__/
 .DS_Store
+
+# Local database dumps and validation reports can contain private data.
+*-dump.sql
+/artifacts/database/
