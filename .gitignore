@@ -19,6 +19,10 @@ override.tf.json
 __pycache__/
 .DS_Store
 
+# Local database dumps and validation reports can contain private data.
+*-dump.sql
+/artifacts/database/
+
 # Playwright dependencies, reports, and local-only test state.
 /node_modules/
 /playwright-report/

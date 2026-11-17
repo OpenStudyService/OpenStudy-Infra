@@ -93,9 +93,17 @@ python3 scripts/provision-database-accounts.py \
 앱 설정의 `DB_USERNAME`은 `openstudy_app`이다. `DB_PASSWORD`에는 앱 SecureString ARN을 전달한다.
 계정 준비 후에만 `apply_database_migrations = true`로 설정한다.
 
+V20과 V21은 뷰를 생성한다. 새 계정 생성 스크립트는 마이그레이션 계정에 `CREATE VIEW`, `SHOW VIEW`를 포함한다. 기존 계정에는 관리자가 승인한 DB 범위에서 두 권한을 추가해야 한다. 앱 계정은 기존 DML 권한을 유지한다.
+
+```sql
+GRANT CREATE VIEW, SHOW VIEW ON `openstudy`.* TO 'openstudy_migrator'@'%';
+```
+
+기존 계정이 있으면 계정 생성 스크립트는 중단한다. 위 권한 보완을 위해 계정을 삭제하거나 다시 만들지 않는다.
+
 ## SQL 관리
 
-Backend의 통합 `V1__init_schema.sql`을 빈 DB에 적용한다.
+Backend의 통합 V1과 후속 V2~V22를 순서대로 적용한다. V1 원본은 변경하지 않는다.
 원본과 실행 담당은 [SQL 안내](../database/migrations/README.md)에 기록한다.
 Flyway가 별도로 `flyway_schema_history` 테이블을 생성한다.
 
@@ -118,11 +126,11 @@ EC2에 Amazon Corretto 21을 설치하고 해당 CPU의 Java를 사용한다.
 같은 스키마를 Backend에서도 관리한다면 이 파일과 Flyway 이력을 함께 인계한다.
 Backend의 Hibernate 자동 테이블 생성은 사용하지 않는다.
 
-### 빈 DB에 통합 V1 적용
+### 빈 DB에 V1~V22 적용
 
-Terraform은 통합 V1과 실행 스크립트를 S3에 올린다. SSM 작업이 EC2에서 Flyway를 실행한다.
-빈 DB에 적용하면 업무·세션 테이블 65개와 Flyway 이력 테이블 1개가 생긴다.
-이력에는 V1 성공이 남는다. 같은 설정으로 다시 실행하면 추가 적용은 없다.
+Terraform은 V1~V22와 실행 스크립트를 S3에 올린다. SSM 작업이 EC2에서 Flyway를 실행한다.
+빈 DB에 적용하면 업무·세션 테이블 80개, Flyway 이력 테이블 1개, 뷰 1개가 생긴다.
+이력에는 V1~V22 성공이 남는다. 같은 설정으로 다시 실행하면 추가 적용은 없다.
 Backend는 Flyway를 끄고 Hibernate `ddl-auto=validate`로 기동한다.
 
 2026-10-28 확인 결과 서울 리전의 기존 RDS는 삭제된 상태다. 실제 DB 적용은 하지 않았다.
@@ -143,8 +151,8 @@ terraform -chdir=terraform/aws output database_migration_association_id
 
 `database_multi_az` 출력은 `false`여야 한다.
 마지막 출력의 연결 ID로 AWS Systems Manager의 State Manager 실행 결과를 확인한다.
-통합 V1 초기 적용에 성공한 뒤 업무·세션 테이블 65개와 Flyway 이력 테이블 1개가 있어야 한다.
-`flyway_schema_history`의 버전 1이 성공인지 확인한다.
+V1~V22 적용에 성공한 뒤 업무·세션 테이블 80개, Flyway 이력 테이블 1개, 뷰 1개가 있어야 한다.
+`flyway_schema_history`의 버전 1~22가 모두 성공인지 확인한다.
 같은 파일로 다시 실행하면 SQL을 재적용하지 않는다.
 DB 주소는 비공개 주소다. 로컬 PC에서 바로 접속할 수 없다.
 자동으로 전환할 대기 DB는 없다. 장애 시 복구 시간이 필요하다.
@@ -169,7 +177,9 @@ Docker와 OpenSSL이 있는 환경에서 실제 스키마를 검사할 수 있�
 python3 scripts/check-database.py
 ```
 
-이 검증은 빈 DB의 통합 V1 적용·이력·테이블 생성, Flyway validate, TLS 인증서·호스트 이름 검사, 두 번째 적용의 무변경과 V1 변경 거부를 확인한다.
+이 검증은 빈 DB의 V1~V22 적용·이력·테이블·뷰 생성, 외래키 참조, Flyway validate, TLS 인증서·호스트 이름 검사, 두 번째 적용의 무변경과 V1 변경 거부를 확인한다.
+
+첨부 SQL 덤프의 격리 복원 검증은 [덤프 검증 안내](database-dump.md)를 따른다.
 Backend의 실행 JAR을 준비하면 같은 임시 DB에 연결해 Hibernate validate와 서버 기동도 확인할 수 있다.
 Java 21의 `keytool`이 필요하다. 임시 DB에만 적용하는 테스트용 인증서를 사용한다.
 

@@ -24,7 +24,7 @@ def accounts_sql(database, migration_password, app_password):
     return (
         f"CREATE USER 'openstudy_migrator'@'%' IDENTIFIED BY '{migration_password}', "
         f"'openstudy_app'@'%' IDENTIFIED BY '{app_password}' REQUIRE SSL;\n"
-        f"GRANT ALTER, CREATE, DROP, INDEX, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON `{database}`.* TO 'openstudy_migrator'@'%';\n"
+        f"GRANT ALTER, CREATE, CREATE VIEW, SHOW VIEW, DROP, INDEX, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON `{database}`.* TO 'openstudy_migrator'@'%';\n"
         f"GRANT SELECT, INSERT, UPDATE, DELETE ON `{database}`.* TO 'openstudy_app'@'%';\n"
     )
 

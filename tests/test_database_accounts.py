@@ -12,6 +12,13 @@ class DatabaseAccountTests(unittest.TestCase):
         sql = accounts.accounts_sql("openstudy", "m" * 40, "TestOnly#Password&With!Symbols_123456789")
         self.assertIn("CREATE USER", sql)
 
+    def test_view_permissions_belong_only_to_migrator(self):
+        sql = accounts.accounts_sql("openstudy", "m" * 40, "a" * 40)
+        grants = [line for line in sql.splitlines() if line.startswith("GRANT ")]
+        self.assertIn("CREATE VIEW, SHOW VIEW", grants[0])
+        self.assertIn("TO 'openstudy_migrator'", grants[0])
+        self.assertEqual(grants[1], "GRANT SELECT, INSERT, UPDATE, DELETE ON `openstudy`.* TO 'openstudy_app'@'%';")
+
     def test_rejects_sql_injection_and_shared_passwords(self):
         for database, first, second in [
             ("openstudy;DROP", "a" * 40, "b" * 40),
