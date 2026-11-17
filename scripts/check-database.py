@@ -209,9 +209,12 @@ def check_schema(archive, backend_jar=None, dump_file=None, report_file=None):
 
             if dump_content is not None:
                 flyway_run("validate")
+            pending = sum(item["state"] == "Pending" for item in json.loads(flyway_run("info").stdout)["migrations"])
             first = json.loads(flyway_run().stdout)
             second = json.loads(flyway_run().stdout)
-            expected = 0 if dump_file else 22
+            versions = sorted((path.name.split("__", 1)[0][1:].replace("_", ".") for path in sql.glob("V*__*.sql")),
+                              key=lambda value: tuple(map(int, value.split("."))))
+            expected = pending if dump_file else len(versions)
             if first["migrationsExecuted"] != expected or second["migrationsExecuted"] != 0:
                 raise RuntimeError("Flyway must apply pending SQL once and leave a second run unchanged.")
             count = run("docker", "exec", mysql, "mysql", "-uroot", f"-p{TEST_DATABASE_PASSWORD}", "--batch", "--skip-column-names", "-e",
@@ -220,10 +223,10 @@ def check_schema(archive, backend_jar=None, dump_file=None, report_file=None):
                 raise RuntimeError(f"Expected 81 tables including Flyway history and one view, received {count}.")
             history = run("docker", "exec", mysql, "mysql", "-uroot", f"-p{TEST_DATABASE_PASSWORD}", "--batch", "--skip-column-names", "-e",
                           "SELECT version,success FROM openstudy.flyway_schema_history ORDER BY installed_rank").stdout.splitlines()
-            if history != [f"{version}\t1" for version in range(1, 23)]:
-                raise RuntimeError("Expected successful V1-V22 history.")
+            if history != [f"{version}\t1" for version in versions]:
+                raise RuntimeError("Expected successful history for every configured migration.")
             flyway_run("validate")
-            report.update(migrations_validated=22, migrations_executed=first["migrationsExecuted"],
+            report.update(migrations_validated=len(versions), migrations_executed=first["migrationsExecuted"],
                           second_run_executed=second["migrationsExecuted"])
 
             def query(statement):
@@ -268,7 +271,7 @@ def check_schema(archive, backend_jar=None, dump_file=None, report_file=None):
             changed = flyway_run(check=False)
             if changed.returncode == 0 or "checksum" not in (changed.stdout + changed.stderr).lower():
                 raise RuntimeError("Flyway must reject changes to an applied migration.")
-            print("MySQL 8.4.11: V1-V22 validated; 81 tables and one view; foreign keys verified; "
+            print(f"MySQL 8.4.11: {len(versions)} migrations validated; 81 tables and one view; foreign keys verified; "
                   "rerun unchanged; modified V1 rejected; app DDL denied; TLS rejects wrong host and CA.")
         finally:
             run("docker", "rm", "--force", application, java, mysql, check=False, timeout=60)
@@ -285,7 +288,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--flyway-archive", type=Path, help="Reuse a downloaded official archive; SHA-256 is checked.")
     parser.add_argument("--backend-jar", type=Path, help="Also validate and start a Backend bootJar against the temporary DB; requires Java keytool.")
-    parser.add_argument("--dump-file", type=Path, help="Restore a local mysqldump into the disposable DB and validate V1-V22. Never contacts an existing DB.")
+    parser.add_argument("--dump-file", type=Path, help="Restore a local mysqldump into the disposable DB and apply pending migrations. Never contacts an existing DB.")
     parser.add_argument("--report", type=Path, help="Write a new private JSON report containing counts and metadata only.")
     args = parser.parse_args()
     if args.dump_file and args.backend_jar:
